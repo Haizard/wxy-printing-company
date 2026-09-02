@@ -107,6 +107,10 @@ export function useJobs() {
   return useFetch<any[]>("/api/jobs");
 }
 
+export function useOrders() {
+  return useFetch<any[]>("/api/orders");
+}
+
 export function useInventory() {
   return useFetch<any[]>("/api/inventory");
 }

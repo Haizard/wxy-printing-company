@@ -1,35 +1,59 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, CreditCard, Clock, Check } from "lucide-react";
+import { ShoppingCart, CreditCard, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTZS } from "@/lib/utils";
+import { useOrders } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-interface Order {
-  id: string;
-  number: string;
-  customer: string;
-  items: string[];
-  total: number;
-  status: "pending" | "paid" | "partially_paid" | "cancelled";
-  paymentMethod: string;
-  createdAt: string;
-}
-
-const orders: Order[] = [
-  { id: "o1", number: "ORD-2026-0001", customer: "Green Valley School", items: ["Company Profile", "ID Cards"], total: 1200000, status: "paid", paymentMethod: "Invoice", createdAt: "Today" },
-  { id: "o2", number: "ORD-2026-0002", customer: "Acme Corp", items: ["Roll-up Banner", "Business Cards"], total: 320000, status: "pending", paymentMethod: "Cash on Delivery", createdAt: "Today" },
-  { id: "o3", number: "ORD-2026-0003", customer: "Tech Solutions", items: ["A3 Posters", "Flyers"], total: 850000, status: "partially_paid", paymentMethod: "Invoice", createdAt: "Yesterday" },
-];
-
-const statusConfig = {
-  pending: { color: "secondary" as const, label: "Pending" },
-  paid: { color: "success" as const, label: "Paid" },
-  partially_paid: { color: "warning" as const, label: "Partial" },
-  cancelled: { color: "danger" as const, label: "Cancelled" },
+const statusConfig: Record<string, { color: "default" | "secondary" | "success" | "warning" | "danger"; label: string; icon: any }> = {
+  pending: { color: "secondary", label: "Pending", icon: Clock },
+  paid: { color: "success", label: "Paid", icon: CheckCircle },
+  partially_paid: { color: "warning", label: "Partial", icon: CreditCard },
+  cancelled: { color: "danger", label: "Cancelled", icon: XCircle },
 };
 
 export default function OrdersPage() {
+  const { data: orders, loading, refetch } = useOrders();
+  const { toast } = useToast();
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const updateOrderStatus = async (orderId: string, status: string, paymentMethod?: string) => {
+    setUpdatingId(orderId);
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status, paymentMethod }),
+      });
+      if (response.ok) {
+        toast({ title: "Order updated", description: `Order marked as ${status}`, variant: "success" });
+        refetch();
+      } else {
+        const err = await response.json();
+        toast({ title: "Error", description: err.error || "Failed to update order", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to update order", variant: "destructive" });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -43,48 +67,166 @@ export default function OrdersPage() {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {orders.map((order, index) => (
-          <motion.div
-            key={order.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
-          >
-            <Card className="cursor-pointer hover:shadow-[var(--glass-shadow)] transition-all duration-200 hover:scale-[0.98]">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <p className="text-headline font-semibold">{order.number}</p>
-                    <p className="text-caption text-[var(--text-tertiary)]">{order.customer}</p>
-                  </div>
-                  <Badge variant={statusConfig[order.status].color}>
-                    {statusConfig[order.status].label}
-                  </Badge>
-                </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 rounded-[var(--radius-lg)] bg-[var(--glass-fill-subtle)] animate-pulse" />
+          ))}
+        </div>
+      ) : (orders || []).length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <ShoppingCart className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3" />
+            <p className="text-subhead text-[var(--text-tertiary)]">
+              No orders yet. Create one from the calculator or cart.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {(orders || []).map((order: any, index: number) => {
+            const config = statusConfig[order.status] || statusConfig.pending;
+            const isExpanded = expandedOrder === order.id;
+            const Icon = config.icon;
+            return (
+              <motion.div
+                key={order.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+              >
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    {/* Order header row */}
+                    <div
+                      className="flex items-center justify-between p-5 cursor-pointer hover:bg-[rgba(255,90,60,0.02)] transition-colors"
+                      onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--bg-gradient-1)] to-[var(--bg-gradient-2)] flex items-center justify-center">
+                          <Icon className="w-5 h-5 text-[var(--accent-primary)]" />
+                        </div>
+                        <div>
+                          <p className="text-headline font-semibold">{order.orderNumber}</p>
+                          <p className="text-caption text-[var(--text-tertiary)]">
+                            {new Date(order.createdAt).toLocaleDateString("en-TZ", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
 
-                <div className="space-y-1 mb-4">
-                  {order.items.map((item, i) => (
-                    <p key={i} className="text-caption text-[var(--text-secondary)] truncate">
-                      • {item}
-                    </p>
-                  ))}
-                </div>
+                      <div className="flex items-center gap-4">
+                        <Badge variant={config.color}>{config.label}</Badge>
+                        <span className="text-headline font-bold text-[var(--accent-primary)]">
+                          {formatTZS(order.total)}
+                        </span>
+                        <div className="flex items-center gap-1 text-caption text-[var(--text-tertiary)]">
+                          <CreditCard className="w-3 h-3" />
+                          {order.paymentMethod || "Cash"}
+                        </div>
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </div>
+                    </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-[rgba(60,60,67,0.15)]">
-                  <span className="text-headline font-bold text-[var(--accent-primary)]">
-                    {formatTZS(order.total)}
-                  </span>
-                  <div className="flex items-center gap-1 text-caption text-[var(--text-tertiary)]">
-                    <CreditCard className="w-3 h-3" />
-                    {order.paymentMethod}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="border-t border-[rgba(60,60,67,0.15)] p-5"
+                      >
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                          <div>
+                            <p className="text-caption text-[var(--text-tertiary)]">Order Total</p>
+                            <p className="text-headline font-bold">{formatTZS(order.total)}</p>
+                          </div>
+                          <div>
+                            <p className="text-caption text-[var(--text-tertiary)]">Payment Method</p>
+                            <p className="text-subhead font-medium capitalize">{order.paymentMethod || "Cash"}</p>
+                          </div>
+                          <div>
+                            <p className="text-caption text-[var(--text-tertiary)]">Created</p>
+                            <p className="text-subhead font-medium">
+                              {new Date(order.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-caption text-[var(--text-tertiary)]">Status</p>
+                            <Badge variant={config.color}>{config.label}</Badge>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-subhead font-medium text-[var(--text-secondary)]">
+                            Actions:
+                          </span>
+                          {order.status === "pending" && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => updateOrderStatus(order.id, "paid")}
+                                disabled={updatingId === order.id}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Mark as Paid
+                              </Button>
+                              <Select
+                                onValueChange={(val) => updateOrderStatus(order.id, val)}
+                                disabled={updatingId === order.id}
+                              >
+                                <SelectTrigger className="w-[160px] h-8">
+                                  <SelectValue placeholder="Change status..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                                  <SelectItem value="cancelled">Cancel Order</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </>
+                          )}
+                          {order.status === "partially_paid" && (
+                            <Button
+                              size="sm"
+                              onClick={() => updateOrderStatus(order.id, "paid")}
+                              disabled={updatingId === order.id}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Mark Fully Paid
+                            </Button>
+                          )}
+                          {order.status === "cancelled" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateOrderStatus(order.id, "pending")}
+                              disabled={updatingId === order.id}
+                            >
+                              <Clock className="w-3 h-3 mr-1" />
+                              Reopen Order
+                            </Button>
+                          )}
+                          {order.status === "paid" && (
+                            <p className="text-caption text-green-600 font-medium">
+                              ✓ Payment complete — no further actions needed.
+                            </p>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

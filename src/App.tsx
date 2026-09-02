@@ -14,6 +14,8 @@ import InventoryPage from "@/pages/InventoryPage";
 import ChatPage from "@/pages/ChatPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import CartPage from "@/pages/CartPage";
+import ProductDetailPage from "@/pages/ProductDetailPage";
 
 export default function App() {
   return (
@@ -33,15 +35,16 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/catalog/:categoryName" element={<CatalogPage />} />
+          <Route path="/catalog/:categoryName" element={<ProductDetailPage />} />
           <Route path="/calculator" element={<CalculatorPage />} />
+          <Route path="/cart" element={<CartPage />} />
           <Route path="/calculator/:categorySlug" element={<CalculatorPage />} />
           <Route path="/quotes" element={<QuotesPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/inventory" element={<RequireAuth allowedRoles={["admin", "inventory_manager", "production"]}><InventoryPage /></RequireAuth>} />
           <Route path="/chat" element={<ChatPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reports" element={<RequireAuth allowedRoles={["admin", "sales"]}><ReportsPage /></RequireAuth>} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
 

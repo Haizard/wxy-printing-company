@@ -1,8 +1,27 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Package, AlertTriangle, TrendingUp } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Package, AlertTriangle, TrendingUp, Plus, Minus, ArrowUpDown } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useInventory, useLowStock } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/use-toast";
 
 function StockIndicator({ current, reorder }: { current: number; reorder: number }) {
   const ratio = reorder > 0 ? current / reorder : 10;
@@ -34,11 +53,60 @@ function StockIndicator({ current, reorder }: { current: number; reorder: number
 }
 
 export default function InventoryPage() {
-  const { data: items, loading } = useInventory();
+  const { data: items, loading, refetch } = useInventory();
   const { data: lowStock } = useLowStock();
+  const { toast } = useToast();
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [movementType, setMovementType] = useState<"in" | "out" | "adjustment">("in");
+  const [quantity, setQuantity] = useState<number>(0);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const inventoryItems = items || [];
   const lowStockCount = lowStock?.length || 0;
+
+  const handleRecordMovement = async () => {
+    if (!selectedItem || quantity <= 0) return;
+    setSubmitting(true);
+
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/inventory/${selectedItem.id}/movements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          movementType,
+          quantity,
+          reason: reason || `${movementType === "in" ? "Stock in" : movementType === "out" ? "Stock out" : "Adjustment"}`,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: "Movement recorded",
+          description: `${movementType === "in" ? "+" : movementType === "out" ? "-" : "="}${quantity} ${selectedItem.unit} — New qty: ${data.newQty}`,
+          variant: "success",
+        });
+        setDialogOpen(false);
+        setSelectedItem(null);
+        setQuantity(0);
+        setReason("");
+        refetch();
+      } else {
+        const err = await response.json();
+        toast({ title: "Failed", description: err.error, variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to record movement", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -144,6 +212,100 @@ export default function InventoryPage() {
                       <span>{Number(item.reorderLevel).toLocaleString()} {item.unit}</span>
                     </div>
                     <StockIndicator current={Number(item.currentQty)} reorder={Number(item.reorderLevel)} />
+                  </div>
+
+                  {/* Record movement button */}
+                  <div className="mt-3 pt-3 border-t border-[rgba(60,60,67,0.15)]">
+                    <Dialog open={dialogOpen && selectedItem?.id === item.id} onOpenChange={(open) => {
+                      setDialogOpen(open);
+                      if (open) setSelectedItem(item);
+                      else { setSelectedItem(null); setQuantity(0); setReason(""); }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="w-full">
+                          <ArrowUpDown className="w-4 h-4 mr-1" />
+                          Record Movement
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Record Stock Movement</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                          <div className="p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+                            <p className="text-subhead font-semibold">{item.name}</p>
+                            <p className="text-caption text-[var(--text-tertiary)]">
+                              Current: {Number(item.currentQty).toLocaleString()} {item.unit}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Movement Type</Label>
+                            <div className="flex gap-2">
+                              <Button
+                                variant={movementType === "in" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setMovementType("in")}
+                                className="flex-1"
+                              >
+                                <Plus className="w-4 h-4 mr-1" />
+                                Stock In
+                              </Button>
+                              <Button
+                                variant={movementType === "out" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setMovementType("out")}
+                                className="flex-1"
+                              >
+                                <Minus className="w-4 h-4 mr-1" />
+                                Stock Out
+                              </Button>
+                              <Button
+                                variant={movementType === "adjustment" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setMovementType("adjustment")}
+                                className="flex-1"
+                              >
+                                Adjust
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Quantity ({item.unit})</Label>
+                            <Input
+                              type="number"
+                              value={quantity || ""}
+                              onChange={(e) => setQuantity(Number(e.target.value))}
+                              placeholder="Enter quantity"
+                              min={0}
+                            />
+                            {movementType === "out" && quantity > Number(item.currentQty) && (
+                              <p className="text-caption text-[var(--accent-danger)]">
+                                Exceeds available stock ({Number(item.currentQty).toLocaleString()})
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Reason (optional)</Label>
+                            <Input
+                              value={reason}
+                              onChange={(e) => setReason(e.target.value)}
+                              placeholder="e.g., New shipment received, Used for JOB-0042"
+                            />
+                          </div>
+
+                          <Button
+                            className="w-full"
+                            onClick={handleRecordMovement}
+                            disabled={submitting || quantity <= 0 || (movementType === "out" && quantity > Number(item.currentQty))}
+                          >
+                            {submitting ? "Recording..." : "Record Movement"}
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </CardContent>
               </Card>

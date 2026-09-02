@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Search, ChevronRight } from "lucide-react";
@@ -27,6 +27,13 @@ export default function CatalogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const { data: categories, loading: catsLoading } = useCategories();
   const { data: products, loading: prodsLoading } = useProducts();
+
+  // Build a map from categoryId -> category slug
+  const categorySlugMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (categories || []).forEach((c: any) => { map[c.id] = c.slug; });
+    return map;
+  }, [categories]);
 
   const filteredCategories = categories?.filter((c: any) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -143,7 +150,7 @@ export default function CatalogPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.06 }}
               >
-                <Link to="/calculator">
+                <Link to={`/catalog/${product.categoryId || 'all'}`}>
                   <Card className="cursor-pointer transition-all duration-200 hover:shadow-[var(--glass-shadow)] hover:scale-[0.98]">
                     <div className="h-40 rounded-t-[var(--radius-lg)] bg-gradient-to-br from-[var(--bg-gradient-1)] to-[var(--bg-gradient-2)] flex items-center justify-center">
                       <span className="text-4xl">🖨️</span>

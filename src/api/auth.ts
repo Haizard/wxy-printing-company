@@ -193,6 +193,47 @@ router.get("/me", async (req: Request, res: Response) => {
   }
 });
 
+// ── Change Password ──────────────────────────────────────────────────────────
+
+router.post("/change-password", async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current and new password are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, decoded.userId));
+    if (!user || !user.passwordHash) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, decoded.userId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+});
+
 // ── Auth Middleware (exported for use in other routes) ───────────────────────
 
 export function authMiddleware(req: Request, res: Response, next: Function) {

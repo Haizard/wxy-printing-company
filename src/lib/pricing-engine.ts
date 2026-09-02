@@ -35,6 +35,7 @@ export interface CalculatorInput {
   model: string;
   material?: string;
   sides?: number;
+  size?: string;
   qty?: number;
   widthCm?: number;
   heightCm?: number;
@@ -267,13 +268,16 @@ const seedPriceRules: PriceRule[] = [
 
 function findMatchingRule(
   categoryId: string,
-  material: string,
+  options: Record<string, string | number>,
 ): PriceRule | undefined {
   return seedPriceRules.find((rule) => {
     if (rule.productId !== categoryId) return false;
 
     const filter = rule.optionFilter;
-    if (filter.material && filter.material !== material) return false;
+    for (const [key, value] of Object.entries(filter)) {
+      const optVal = options[key];
+      if (optVal === undefined || String(optVal) !== String(value)) return false;
+    }
 
     return true;
   });
@@ -400,7 +404,12 @@ function resolveSignageEngraveCut(
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
 export function calculatePrice(input: CalculatorInput): CalculatorResult {
-  const rule = findMatchingRule(input.categoryId, input.material || "");
+  const options: Record<string, string | number> = {};
+  if (input.material) options.material = input.material;
+  if (input.sides) options.sides = String(input.sides);
+  if (input.size) options.size = String(input.size);
+
+  const rule = findMatchingRule(input.categoryId, options);
 
   if (!rule) {
     return {
