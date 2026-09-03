@@ -1568,18 +1568,22 @@ async function ensureNewColumns() {
   }
 }
 
-ensureContactMessagesTable()
-  .then(ensureNewColumns)
-  .then(() => {
-    // On Vercel the platform imports this module as a serverless function and
-    // manages its own listener — only bind a port when run directly (local dev).
-    if (!process.env.VERCEL) {
+// On Vercel the platform imports this module as a serverless function and
+// manages its own listener. The shared database is already fully provisioned
+// (tables and additive columns were created by the dev server long ago), so
+// the boot-time schema sync is skipped there — it would otherwise grab the
+// instance's only pool connection for up to connect_timeout on every cold
+// start, starving the first request and adding connection pressure.
+if (process.env.VERCEL) {
+  console.log("PrintHub API running as a Vercel serverless function");
+} else {
+  ensureContactMessagesTable()
+    .then(ensureNewColumns)
+    .then(() => {
       app.listen(PORT, () => {
         console.log(`PrintHub API server running on port ${PORT}`);
       });
-    } else {
-      console.log("PrintHub API running as a Vercel serverless function");
-    }
-  });
+    });
+}
 
 export default app;
