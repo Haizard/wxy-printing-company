@@ -1562,11 +1562,29 @@ app.get("/api/admin/migrate", async (req, res) => {
     await bootstrapMod.ensureSchemaWith(targetDb);
 
     // 2. Check if target already has data
+    const force = req.query.force === 'true';
     const [existing] = await targetDb.select({ n: count() }).from(schemaMod.users);
-    if ((existing?.n ?? 0) > 0) {
+    if ((existing?.n ?? 0) > 0 && !force) {
       await source.end();
       await target.end();
-      return res.status(409).json({ error: "Target database already has users — aborting to avoid duplicates. Create a fresh empty DB." });
+      return res.status(409).json({ error: "Target database already has users — aborting to avoid duplicates. Use ?force=true to overwrite, or create a fresh empty DB." });
+    }
+
+    // 2b. If force=true, truncate all tables in reverse FK order
+    if (force && (existing?.n ?? 0) > 0) {
+      const TRUNCATE_ORDER = [
+        'chat_messages', 'chat_threads', 'contact_messages',
+        'job_status_history', 'job_files', 'jobs',
+        'orders', 'quote_lines', 'quotes',
+        'inventory_movements', 'inventory_items',
+        'price_bands', 'price_rules',
+        'product_finishing_options', 'finishing_options',
+        'product_option_values', 'product_options',
+        'products', 'categories', 'users',
+      ];
+      for (const t of TRUNCATE_ORDER) {
+        await targetDb.execute((await import('drizzle-orm')).sql.raw(`TRUNCATE TABLE ${t} CASCADE`));
+      }
     }
 
     // 3. Foreign-key-safe copy order
