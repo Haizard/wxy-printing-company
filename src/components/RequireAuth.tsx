@@ -1,6 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Everyone who is NOT a plain customer works on the platform (admin panel).
+export const STAFF_ROLES = ["admin", "sales", "production", "inventory_manager"];
+// The client-side area is reserved for registered customers only.
+export const CUSTOMER_ROLE = "customer";
+
 const roleHierarchy: Record<string, string[]> = {
   admin: ["admin", "sales", "production", "inventory_manager", "customer"],
   sales: ["sales", "customer"],
@@ -12,9 +17,11 @@ const roleHierarchy: Record<string, string[]> = {
 export function RequireAuth({
   children,
   allowedRoles,
+  redirectTo,
 }: {
   children: React.ReactNode;
   allowedRoles?: string[];
+  redirectTo?: string;
 }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -31,22 +38,35 @@ export function RequireAuth({
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Check role if allowedRoles is specified
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = roleHierarchy[user.role] || [user.role];
     const hasAccess = allowedRoles.some((r) => userRoles.includes(r));
+
     if (!hasAccess) {
+      // Clients must never land inside the staff/admin panel — send them to
+      // their own area instead of showing them internal pages.
+      if (user.role === CUSTOMER_ROLE) {
+        return <Navigate to={redirectTo || "/client"} replace />;
+      }
+      // Staff hitting a page reserved for another staff role (or the client
+      // area): explain, and offer a way out.
+      const isClientArea = allowedRoles.includes(CUSTOMER_ROLE);
       return (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center px-4">
           <div className="text-center glass-card-strong p-8 rounded-[var(--radius-lg)] max-w-md">
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-title-2 font-bold mb-2">Access Denied</h2>
             <p className="text-body text-[var(--text-secondary)] mb-4">
-              You don't have permission to view this page.
+              {isClientArea
+                ? "This area is for registered clients. Staff members use the dashboard instead."
+                : "You don't have permission to view this page."}
             </p>
-            <p className="text-caption text-[var(--text-tertiary)]">
-              Required: {allowedRoles.join(" or ")} &middot; Your role: {user.role}
-            </p>
+            <a
+              href={isClientArea ? "/dashboard" : "/products"}
+              className="inline-flex items-center justify-center h-10 px-5 rounded-pill bg-[var(--accent-primary)] text-white text-subhead font-semibold hover:opacity-90 transition-opacity"
+            >
+              {isClientArea ? "Go to dashboard" : "Back to products"}
+            </a>
           </div>
         </div>
       );

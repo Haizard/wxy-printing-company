@@ -311,6 +311,8 @@ export const orders = pgTable(
     status: orderStatusEnum("status").default("pending"),
     total: integer("total").notNull(),
     paymentMethod: text("payment_method"),
+    items: jsonb("items").default([]),
+    notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
@@ -429,6 +431,7 @@ export const chatThreads = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     jobId: uuid("job_id").references(() => jobs.id),
     quoteId: uuid("quote_id").references(() => quotes.id),
+    customerId: uuid("customer_id").references(() => users.id),
     isInternal: boolean("is_internal").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -511,3 +514,16 @@ export const jobsRelations = relations(jobs, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ── Contact messages (public contact form → admin inbox) ───────────────────
+
+export const contactMessages = pgTable("contact_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("new"), // "new" | "read"
+  createdAt: timestamp("created_at").defaultNow(),
+});

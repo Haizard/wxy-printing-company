@@ -134,6 +134,14 @@ export function useUpdateJobStatus() {
   );
 }
 
+export function usePriceRules() {
+  return useFetch<any[]>("/api/price-rules");
+}
+
+export function useFinishingOptions() {
+  return useFetch<any[]>("/api/finishing-options");
+}
+
 export function useCalculatePrice() {
   return useMutation<
     any,

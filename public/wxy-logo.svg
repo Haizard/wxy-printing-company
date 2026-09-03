@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 100" fill="none">
+  <!-- W mark with diagonal stripes -->
+  <g transform="translate(10, 15)">
+    <!-- Left diagonal stripe -->
+    <path d="M5 0 L25 70 L35 70 L15 0 Z" fill="#C41E1E"/>
+    <!-- Middle diagonal stripe -->
+    <path d="M20 0 L40 70 L50 70 L30 0 Z" fill="#C41E1E"/>
+    <!-- Right diagonal stripe with yellow accent -->
+    <path d="M35 0 L55 70 L65 70 L45 0 Z" fill="#C41E1E"/>
+    <!-- Yellow triangle accent -->
+    <polygon points="45,0 65,0 55,35" fill="#F5A623"/>
+    <!-- Red dot -->
+    <circle cx="5" cy="65" r="6" fill="#C41E1E"/>
+  </g>
+  <!-- WXY text -->
+  <text x="100" y="55" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="48" font-weight="800" fill="#C41E1E" letter-spacing="-1">WXY</text>
+  <!-- Solutions text -->
+  <text x="100" y="80" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="22" font-weight="600" fill="#C41E1E">Solutions</text>
+</svg>

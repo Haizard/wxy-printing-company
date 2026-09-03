@@ -21,6 +21,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "packages"],
+  "include": ["src", "api", "packages"],
   "exclude": ["src/convex"]
 }

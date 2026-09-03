@@ -12,14 +12,14 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: {
     fullName: string;
     email?: string;
     phone?: string;
     password: string;
     role?: string;
-  }) => Promise<void>;
+  }) => Promise<User>;
   logout: () => void;
 }
 
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(data.token);
     localStorage.setItem("printhub_token", data.token);
     localStorage.setItem("printhub_user", JSON.stringify(data.user));
+    return data.user as User;
   };
 
   const register = async (data: {
@@ -83,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(result.token);
     localStorage.setItem("printhub_token", result.token);
     localStorage.setItem("printhub_user", JSON.stringify(result.user));
+    return result.user as User;
   };
 
   const logout = () => {

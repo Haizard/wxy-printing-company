@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { RequireAuth } from "@/components/RequireAuth";
+import PublicLayout from "@/components/layout/PublicLayout";
+import { RequireAuth, STAFF_ROLES, CUSTOMER_ROLE } from "@/components/RequireAuth";
+import { CustomerShell } from "@/components/layout/CustomerShell";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -16,6 +18,16 @@ import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import CartPage from "@/pages/CartPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
+import UsersPage from "@/pages/UsersPage";
+import PriceRulesPage from "@/pages/PriceRulesPage";
+import ProjectsPage from "@/pages/ProjectsPage";
+import AboutPage from "@/pages/AboutPage";
+import ProductsPage from "@/pages/ProductsPage";
+import OurWorkPage from "@/pages/OurWorkPage";
+import ContactPage from "@/pages/ContactPage";
+import ContactMessagesPage from "@/pages/ContactMessagesPage";
+import ClientOrdersPage from "@/pages/ClientOrdersPage";
+import ClientDashboardPage from "@/pages/ClientDashboardPage";
 
 export default function App() {
   return (
@@ -24,11 +36,17 @@ export default function App() {
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route element={<PublicLayout />}>
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/our-work" element={<OurWorkPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+        </Route>
 
-        {/* Protected routes */}
+        {/* Staff / platform routes (admin panel — customers never see this) */}
         <Route
           element={
-            <RequireAuth>
+            <RequireAuth allowedRoles={STAFF_ROLES}>
               <AppLayout />
             </RequireAuth>
           }
@@ -45,7 +63,24 @@ export default function App() {
           <Route path="/inventory" element={<RequireAuth allowedRoles={["admin", "inventory_manager", "production"]}><InventoryPage /></RequireAuth>} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/reports" element={<RequireAuth allowedRoles={["admin", "sales"]}><ReportsPage /></RequireAuth>} />
+          <Route path="/price-rules" element={<RequireAuth allowedRoles={["admin"]}><PriceRulesPage /></RequireAuth>} />
+          <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/users" element={<RequireAuth allowedRoles={["admin"]}><UsersPage /></RequireAuth>} />
+          <Route path="/messages" element={<RequireAuth allowedRoles={["admin"]}><ContactMessagesPage /></RequireAuth>} />
+        </Route>
+
+        {/* Client area — only for registered customers, no admin panel access */}
+        <Route
+          element={
+            <RequireAuth allowedRoles={[CUSTOMER_ROLE]}>
+              <CustomerShell />
+            </RequireAuth>
+          }
+        >
+          <Route path="/client" element={<ClientDashboardPage />} />
+          <Route path="/client/orders" element={<ClientOrdersPage />} />
+          <Route path="/client/chat" element={<ChatPage />} />
         </Route>
 
         {/* Catch-all redirect */}

@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { db } from "../db/index.js";
+import { db } from "../db/index";
 import {
   categories,
   products,
@@ -21,13 +21,14 @@ import {
   inventoryMovements,
   chatThreads,
   chatMessages,
-} from "../db/schema.js";
+  contactMessages,
+} from "../db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
-import authRoutes, { authMiddleware } from "./auth.js";
+import authRoutes, { authMiddleware } from "./auth";
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 // ── Auth Routes ─────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
@@ -331,8 +332,11 @@ app.post("/api/quotes", authMiddleware, async (req, res) => {
 
 // ── Jobs (protected) ────────────────────────────────────────────────────────
 
-app.get("/api/jobs", authMiddleware, async (_req, res) => {
+app.get("/api/jobs", authMiddleware, async (req, res) => {
   try {
+    const user = (req as any).user;
+    // Jobs are an internal production concern — clients never see the list.
+    if (!isStaffUser(user)) return res.json([]);
     const allJobs = await db.select().from(jobs);
     res.json(allJobs);
   } catch (error) {
@@ -542,9 +546,18 @@ app.post("/api/inventory/:id/movements", authMiddleware, async (req, res) => {
 
 // ── Chat ────────────────────────────────────────────────────────────────────
 
-app.get("/api/chat/threads", authMiddleware, async (_req, res) => {
+const STAFF_ROLES = ["admin", "sales", "production", "inventory_manager"];
+const isStaffUser = (user: any) => STAFF_ROLES.includes(user?.role);
+
+app.get("/api/chat/threads", authMiddleware, async (req, res) => {
   try {
-    const threads = await db.select().from(chatThreads);
+    const user = (req as any).user;
+    const threads = isStaffUser(user)
+      ? await db.select().from(chatThreads)
+      : await db
+          .select()
+          .from(chatThreads)
+          .where(eq(chatThreads.customerId, user.userId));
     res.json(threads);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch threads" });
@@ -554,11 +567,16 @@ app.get("/api/chat/threads", authMiddleware, async (_req, res) => {
 app.post("/api/chat/threads", authMiddleware, async (req, res) => {
   try {
     const { jobId, isInternal } = req.body;
+    const user = (req as any).user;
+    const isCustomer = !isStaffUser(user);
     const [thread] = await db
       .insert(chatThreads)
       .values({
-        jobId: jobId || null,
-        isInternal: isInternal || false,
+        // Customers can only open support threads about themselves — never
+        // link internal jobs or staff-only threads.
+        jobId: isCustomer ? null : jobId || null,
+        isInternal: isCustomer ? false : isInternal || false,
+        customerId: isCustomer ? user.userId : null,
       })
       .returning();
     res.json(thread);
@@ -570,6 +588,16 @@ app.post("/api/chat/threads", authMiddleware, async (req, res) => {
 app.get("/api/chat/threads/:threadId/messages", authMiddleware, async (req, res) => {
   try {
     const threadId = req.params.threadId as string;
+    const user = (req as any).user;
+    const [thread] = await db
+      .select()
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId));
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    // Customers may only read their own support threads.
+    if (!isStaffUser(user) && thread.customerId !== user.userId) {
+      return res.status(403).json({ error: "Not your conversation" });
+    }
     const messages = await db
       .select()
       .from(chatMessages)
@@ -585,6 +613,15 @@ app.post("/api/chat/threads/:threadId/messages", authMiddleware, async (req, res
     const { body } = req.body;
     const user = (req as any).user;
     const threadId = req.params.threadId as string;
+    if (!body?.trim()) return res.status(400).json({ error: "Message is required" });
+    const [thread] = await db
+      .select()
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId));
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    if (!isStaffUser(user) && thread.customerId !== user.userId) {
+      return res.status(403).json({ error: "Not your conversation" });
+    }
     const [message] = await db
       .insert(chatMessages)
       .values({
@@ -602,10 +639,32 @@ app.post("/api/chat/threads/:threadId/messages", authMiddleware, async (req, res
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-app.get("/api/orders", authMiddleware, async (_req, res) => {
+app.get("/api/orders", authMiddleware, async (req, res) => {
   try {
-    const allOrders = await db.select().from(orders);
-    res.json(allOrders);
+    const user = (req as any).user;
+    // Customers only ever see their own requests; staff see everything.
+    const base = db
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        quoteId: orders.quoteId,
+        customerId: orders.customerId,
+        status: orders.status,
+        total: orders.total,
+        paymentMethod: orders.paymentMethod,
+        items: orders.items,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        customerName: users.fullName,
+      })
+      .from(orders)
+      .leftJoin(users, eq(orders.customerId, users.id));
+    const rows = isStaffUser(user)
+      ? await base.orderBy(sql`${orders.createdAt} desc`)
+      : await base
+          .where(eq(orders.customerId, user.userId))
+          .orderBy(sql`${orders.createdAt} desc`);
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch orders" });
   }
@@ -619,8 +678,9 @@ app.post("/api/orders", authMiddleware, async (req, res) => {
     const year = new Date().getFullYear();
     const orderNumber = `ORD-${year}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
 
-    // Calculate total from items
-    const total = items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0;
+    // Calculate total from items (price is 0 for open client requests — the
+    // team confirms the exact price for the client's specification).
+    const total = items?.reduce((sum: number, item: any) => sum + (Number(item.price) * Number(item.quantity)), 0) || 0;
 
     const [order] = await db
       .insert(orders)
@@ -631,6 +691,8 @@ app.post("/api/orders", authMiddleware, async (req, res) => {
         total,
         paymentMethod: paymentMethod || 'cash',
         status: 'pending',
+        items: items || [],
+        notes: notes || null,
       })
       .returning();
 
@@ -645,6 +707,10 @@ app.post("/api/orders", authMiddleware, async (req, res) => {
 
 app.patch("/api/orders/:id/status", authMiddleware, async (req, res) => {
   try {
+    const user = (req as any).user;
+    if (!isStaffUser(user)) {
+      return res.status(403).json({ error: "Only staff can update orders" });
+    }
     const orderId = req.params.id as string;
     const { status, paymentMethod } = req.body;
     const validStatuses = ["pending", "paid", "partially_paid", "cancelled"];
@@ -685,9 +751,17 @@ app.get("/api/products-by-category/:identifier", async (req, res) => {
 
 // ── Chat threads with user info ──────────────────────────────────────────────
 
-app.get("/api/chat/threads-with-users", authMiddleware, async (_req, res) => {
+app.get("/api/chat/threads-with-users", authMiddleware, async (req, res) => {
   try {
-    const threads = await db.select().from(chatThreads);
+    const user = (req as any).user;
+    // Customers only see their own support conversations — never staff
+    // threads or other customers' chats.
+    const threads = isStaffUser(user)
+      ? await db.select().from(chatThreads)
+      : await db
+          .select()
+          .from(chatThreads)
+          .where(eq(chatThreads.customerId, user.userId));
     const threadsWithInfo = await Promise.all(
       threads.map(async (thread) => {
         let jobInfo = null;
@@ -695,9 +769,17 @@ app.get("/api/chat/threads-with-users", authMiddleware, async (_req, res) => {
           const [job] = await db.select().from(jobs).where(eq(jobs.id, thread.jobId));
           jobInfo = job;
         }
+        let customerName: string | null = null;
+        if (thread.customerId) {
+          const [customer] = await db
+            .select({ fullName: users.fullName })
+            .from(users)
+            .where(eq(users.id, thread.customerId));
+          customerName = customer?.fullName || null;
+        }
         const msgs = await db.select().from(chatMessages).where(eq(chatMessages.threadId, thread.id));
         const lastMessage = msgs[msgs.length - 1] || null;
-        return { ...thread, jobInfo, lastMessage, messageCount: msgs.length };
+        return { ...thread, customerName, jobInfo, lastMessage, messageCount: msgs.length };
       }),
     );
     res.json(threadsWithInfo);
@@ -797,10 +879,707 @@ app.post("/api/jobs/:id/files", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Admin: User Management ────────────────────────────────────────────────
+
+app.get("/api/users", authMiddleware, async (_req, res) => {
+  try {
+    const allUsers = await db.select({
+      id: users.id,
+      fullName: users.fullName,
+      email: users.email,
+      phone: users.phone,
+      role: users.role,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+    }).from(users);
+    res.json(allUsers);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.put("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { fullName, email, phone, role, isActive } = req.body;
+    const [updated] = await db.update(users)
+      .set({ fullName, email, phone, role, isActive })
+      .where(eq(users.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    res.json({ id: updated.id, fullName: updated.fullName, email: updated.email, phone: updated.phone, role: updated.role, isActive: updated.isActive });
+  } catch (error) {
+    console.error("Update user error:", error);
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+app.delete("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(users).where(eq(users.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// ── Admin: Category CRUD ───────────────────────────────────────────────────
+
+app.post("/api/categories", authMiddleware, async (req, res) => {
+  try {
+    const { name, slug, icon, parentId, sortOrder, internalOnly } = req.body;
+    if (!name || !slug) return res.status(400).json({ error: "Name and slug are required" });
+    const [cat] = await db.insert(categories).values({ name, slug, icon: icon || null, parentId: parentId || null, sortOrder: sortOrder || 0, internalOnly: internalOnly || false }).returning();
+    res.status(201).json(cat);
+  } catch (error: any) {
+    console.error("Create category error:", error);
+    res.status(500).json({ error: error.message || "Failed to create category" });
+  }
+});
+
+app.put("/api/categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, slug, icon, parentId, sortOrder, internalOnly } = req.body;
+    const [updated] = await db.update(categories).set({ name, slug, icon, parentId, sortOrder, internalOnly }).where(eq(categories.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Category not found" });
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update category error:", error);
+    res.status(500).json({ error: error.message || "Failed to update category" });
+  }
+});
+
+app.delete("/api/categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(categories).where(eq(categories.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete category" });
+  }
+});
+
+// ── Admin: Product CRUD ────────────────────────────────────────────────────
+
+app.post("/api/products", authMiddleware, async (req, res) => {
+  try {
+    const { name, slug, description, categoryId, pricingModel, baseUnit, minOrderQty, leadTimeDays, isActive, isShopVisible, images } = req.body;
+    if (!name || !slug || !categoryId || !pricingModel) return res.status(400).json({ error: "Name, slug, category, and pricing model are required" });
+    const [product] = await db.insert(products).values({
+      name, slug, description: description || null, categoryId, pricingModel,
+      baseUnit: baseUnit || null, minOrderQty: minOrderQty || 1, leadTimeDays: leadTimeDays || null,
+      isActive: isActive !== false, isShopVisible: isShopVisible !== false,
+      images: images || [],
+    }).returning();
+    res.status(201).json(product);
+  } catch (error: any) {
+    console.error("Create product error:", error);
+    res.status(500).json({ error: error.message || "Failed to create product" });
+  }
+});
+
+app.put("/api/products/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, slug, description, categoryId, pricingModel, baseUnit, minOrderQty, leadTimeDays, isActive, isShopVisible, images } = req.body;
+    const updateData: Record<string, any> = {
+      name, slug, description, categoryId, pricingModel, baseUnit, minOrderQty, leadTimeDays, isActive, isShopVisible,
+    };
+    if (images !== undefined) updateData.images = images;
+    const [updated] = await db.update(products).set(updateData).where(eq(products.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Product not found" });
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update product error:", error);
+    res.status(500).json({ error: error.message || "Failed to update product" });
+  }
+});
+
+app.delete("/api/products/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(products).where(eq(products.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete product" });
+  }
+});
+
+// ── Admin: Inventory CRUD ──────────────────────────────────────────────────
+
+app.post("/api/inventory", authMiddleware, async (req, res) => {
+  try {
+    const { name, sku, unit, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    if (!name || !unit) return res.status(400).json({ error: "Name and unit are required" });
+    const [item] = await db.insert(inventoryItems).values({
+      name, sku: sku || null, unit, currentQty: String(currentQty || 0), reorderLevel: String(reorderLevel || 0), unitCost: unitCost || null, supplier: supplier || null,
+    }).returning();
+    res.status(201).json(item);
+  } catch (error: any) {
+    console.error("Create inventory item error:", error);
+    res.status(500).json({ error: error.message || "Failed to create inventory item" });
+  }
+});
+
+app.put("/api/inventory/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, sku, unit, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    const [updated] = await db.update(inventoryItems).set({
+      name, sku, unit, currentQty: String(currentQty), reorderLevel: String(reorderLevel), unitCost, supplier,
+    }).where(eq(inventoryItems.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Inventory item not found" });
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update inventory item error:", error);
+    res.status(500).json({ error: error.message || "Failed to update inventory item" });
+  }
+});
+
+app.delete("/api/inventory/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete inventory item" });
+  }
+});
+
+// ── Delete Quote ───────────────────────────────────────────────────────────
+
+app.delete("/api/quotes/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(quoteLines).where(eq(quoteLines.quoteId, id));
+    await db.delete(quotes).where(eq(quotes.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete quote" });
+  }
+});
+
+// ── Delete Job ─────────────────────────────────────────────────────────────
+
+app.delete("/api/jobs/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(jobStatusHistory).where(eq(jobStatusHistory.jobId, id));
+    await db.delete(jobFiles).where(eq(jobFiles.jobId, id));
+    await db.delete(jobs).where(eq(jobs.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete job" });
+  }
+});
+
+// ── Delete Order ───────────────────────────────────────────────────────────
+
+app.delete("/api/orders/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isStaffUser(user)) {
+      return res.status(403).json({ error: "Only staff can delete orders" });
+    }
+    const id = req.params.id as string;
+    await db.delete(orders).where(eq(orders.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete order" });
+  }
+});
+
+// ── Delete Chat Thread ─────────────────────────────────────────────────────
+
+app.delete("/api/chat/threads/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const id = req.params.id as string;
+    const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, id));
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    if (!isStaffUser(user) && thread.customerId !== user.userId) {
+      return res.status(403).json({ error: "Not your conversation" });
+    }
+    await db.delete(chatMessages).where(eq(chatMessages.threadId, id));
+    await db.delete(chatThreads).where(eq(chatThreads.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete chat thread" });
+  }
+});
+
+// ── Price Rules CRUD ─────────────────────────────────────────────────────────
+
+app.get("/api/price-rules", authMiddleware, async (req, res) => {
+  try {
+    const rules = await db
+      .select({
+        id: priceRules.id,
+        productId: priceRules.productId,
+        pricingModel: priceRules.pricingModel,
+        optionFilter: priceRules.optionFilter,
+        markupPercent: priceRules.markupPercent,
+        minCharge: priceRules.minCharge,
+        currency: priceRules.currency,
+        isInternalCost: priceRules.isInternalCost,
+        activeFrom: priceRules.activeFrom,
+        activeTo: priceRules.activeTo,
+        createdAt: priceRules.createdAt,
+        productName: products.name,
+        productSlug: products.slug,
+        categoryName: categories.name,
+      })
+      .from(priceRules)
+      .leftJoin(products, eq(priceRules.productId, products.id))
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .orderBy(products.name, priceRules.createdAt);
+
+    // Attach bands to each rule
+    const ruleIds = rules.map((r: any) => r.id);
+    let allBands: any[] = [];
+    if (ruleIds.length > 0) {
+      allBands = await db.select().from(priceBands).where(
+        sql`${priceBands.priceRuleId} IN ${ruleIds}`
+      );
+    }
+    const bandsByRule = new Map<string, any[]>();
+    for (const band of allBands) {
+      const list = bandsByRule.get(band.priceRuleId) || [];
+      list.push(band);
+      bandsByRule.set(band.priceRuleId, list);
+    }
+    const result = rules.map((r: any) => ({ ...r, bands: bandsByRule.get(r.id) || [] }));
+    res.json(result);
+  } catch (error) {
+    console.error("Fetch price rules error:", error);
+    res.status(500).json({ error: "Failed to fetch price rules" });
+  }
+});
+
+app.post("/api/price-rules", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { productId, pricingModel, optionFilter, markupPercent, minCharge, currency, isInternalCost, bands } = req.body;
+    if (!productId || !pricingModel) return res.status(400).json({ error: "Product and pricing model are required" });
+
+    const [rule] = await db.insert(priceRules).values({
+      productId,
+      pricingModel,
+      optionFilter: optionFilter || {},
+      markupPercent: markupPercent != null ? String(markupPercent) : null,
+      minCharge: minCharge || null,
+      currency: currency || "TZS",
+      isInternalCost: isInternalCost || false,
+      createdBy: user.userId,
+    }).returning();
+
+    // Insert bands
+    if (bands && bands.length > 0) {
+      const bandRows = bands.map((b: any, i: number) => ({
+        priceRuleId: rule.id,
+        qtyMin: b.qtyMin != null ? Number(b.qtyMin) : null,
+        qtyMax: b.qtyMax != null ? Number(b.qtyMax) : null,
+        areaMin: b.areaMin != null ? String(b.areaMin) : null,
+        areaMax: b.areaMax != null ? String(b.areaMax) : null,
+        unitPriceMin: Number(b.unitPriceMin) || 0,
+        unitPriceMax: b.unitPriceMax != null ? Number(b.unitPriceMax) : null,
+        sideCount: b.sideCount != null ? Number(b.sideCount) : null,
+        leafCount: b.leafCount != null ? Number(b.leafCount) : null,
+        sortOrder: b.sortOrder ?? i,
+      }));
+      await db.insert(priceBands).values(bandRows);
+    }
+
+    res.status(201).json(rule);
+  } catch (error: any) {
+    console.error("Create price rule error:", error);
+    res.status(500).json({ error: error.message || "Failed to create price rule" });
+  }
+});
+
+app.put("/api/price-rules/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { productId, pricingModel, optionFilter, markupPercent, minCharge, currency, isInternalCost, bands } = req.body;
+
+    const [updated] = await db.update(priceRules).set({
+      productId,
+      pricingModel,
+      optionFilter: optionFilter || {},
+      markupPercent: markupPercent != null ? String(markupPercent) : null,
+      minCharge: minCharge || null,
+      currency: currency || "TZS",
+      isInternalCost: isInternalCost || false,
+    }).where(eq(priceRules.id, id)).returning();
+
+    if (!updated) return res.status(404).json({ error: "Price rule not found" });
+
+    // Replace bands: delete old, insert new
+    if (bands !== undefined) {
+      await db.delete(priceBands).where(eq(priceBands.priceRuleId, id));
+      if (bands.length > 0) {
+        const bandRows = bands.map((b: any, i: number) => ({
+          priceRuleId: id,
+          qtyMin: b.qtyMin != null ? Number(b.qtyMin) : null,
+          qtyMax: b.qtyMax != null ? Number(b.qtyMax) : null,
+          areaMin: b.areaMin != null ? String(b.areaMin) : null,
+          areaMax: b.areaMax != null ? String(b.areaMax) : null,
+          unitPriceMin: Number(b.unitPriceMin) || 0,
+          unitPriceMax: b.unitPriceMax != null ? Number(b.unitPriceMax) : null,
+          sideCount: b.sideCount != null ? Number(b.sideCount) : null,
+          leafCount: b.leafCount != null ? Number(b.leafCount) : null,
+          sortOrder: b.sortOrder ?? i,
+        }));
+        await db.insert(priceBands).values(bandRows);
+      }
+    }
+
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update price rule error:", error);
+    res.status(500).json({ error: error.message || "Failed to update price rule" });
+  }
+});
+
+app.delete("/api/price-rules/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(priceBands).where(eq(priceBands.priceRuleId, id));
+    await db.delete(priceRules).where(eq(priceRules.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete price rule" });
+  }
+});
+
+// ── Finishing Options CRUD ───────────────────────────────────────────────────
+
+app.post("/api/finishing-options", authMiddleware, async (req, res) => {
+  try {
+    const { name, unit, price } = req.body;
+    if (!name || !unit || price == null) return res.status(400).json({ error: "Name, unit, and price are required" });
+    const [fo] = await db.insert(finishingOptions).values({ name, unit, price: Number(price) }).returning();
+    res.status(201).json(fo);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to create finishing option" });
+  }
+});
+
+app.put("/api/finishing-options/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, unit, price } = req.body;
+    const [updated] = await db.update(finishingOptions).set({ name, unit, price: Number(price) }).where(eq(finishingOptions.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Finishing option not found" });
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to update finishing option" });
+  }
+});
+
+app.delete("/api/finishing-options/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(finishingOptions).where(eq(finishingOptions.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete finishing option" });
+  }
+});
+
+app.get("/api/finishing-options", authMiddleware, async (req, res) => {
+  try {
+    const results = await db.select().from(finishingOptions);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch finishing options" });
+  }
+});
+
+// ── Projects (completed work showcase) ─────────────────────────────────────
+
+// In-memory projects store (no separate table needed for MVP showcase)
+const projectsStore: Array<{
+  id: string;
+  title: string;
+  description: string;
+  clientName: string;
+  category: string;
+  images: string[];
+  completedDate: string;
+  featured: boolean;
+  createdBy: string;
+  createdAt: string;
+}> = [];
+
+app.get("/api/projects", async (_req, res) => {
+  try {
+    res.json(projectsStore.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch projects" });
+  }
+});
+
+app.post("/api/projects", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { title, description, clientName, category, images, completedDate, featured } = req.body;
+    if (!title) return res.status(400).json({ error: "Title is required" });
+    const project = {
+      id: `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      description: description || "",
+      clientName: clientName || "",
+      category: category || "",
+      images: images || [],
+      completedDate: completedDate || new Date().toISOString().split("T")[0],
+      featured: featured || false,
+      createdBy: user.userId,
+      createdAt: new Date().toISOString(),
+    };
+    projectsStore.push(project);
+    res.status(201).json(project);
+  } catch (error) {
+    console.error("Create project error:", error);
+    res.status(500).json({ error: "Failed to create project" });
+  }
+});
+
+app.put("/api/projects/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const idx = projectsStore.findIndex((p) => p.id === id);
+    if (idx === -1) return res.status(404).json({ error: "Project not found" });
+    const { title, description, clientName, category, images, completedDate, featured } = req.body;
+    projectsStore[idx] = {
+      ...projectsStore[idx],
+      ...(title !== undefined && { title }),
+      ...(description !== undefined && { description }),
+      ...(clientName !== undefined && { clientName }),
+      ...(category !== undefined && { category }),
+      ...(images !== undefined && { images }),
+      ...(completedDate !== undefined && { completedDate }),
+      ...(featured !== undefined && { featured }),
+    };
+    res.json(projectsStore[idx]);
+  } catch (error) {
+    console.error("Update project error:", error);
+    res.status(500).json({ error: "Failed to update project" });
+  }
+});
+
+app.delete("/api/projects/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const idx = projectsStore.findIndex((p) => p.id === id);
+    if (idx === -1) return res.status(404).json({ error: "Project not found" });
+    projectsStore.splice(idx, 1);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete project" });
+  }
+});
+
+// ── Direct Job Creation (admin creates jobs after client conversation) ────
+
+app.post("/api/jobs", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { title, priority, dueDate, assignedTo, notes } = req.body;
+    if (!title) return res.status(400).json({ error: "Title is required" });
+
+    const year = new Date().getFullYear();
+    const jobNumber = `JOB-${year}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        jobNumber,
+        title,
+        status: "confirmed",
+        assignedTo: assignedTo || null,
+        priority: priority || "normal",
+        dueDate: dueDate || null,
+      })
+      .returning();
+
+    await db.insert(jobStatusHistory).values({
+      jobId: job.id,
+      fromStatus: null,
+      toStatus: "confirmed",
+      changedBy: user.userId,
+      note: notes || `Created by ${user.role}`,
+    });
+
+    res.status(201).json(job);
+  } catch (error) {
+    console.error("Create job error:", error);
+    res.status(500).json({ error: "Failed to create job" });
+  }
+});
+
+// ── Public projects (no auth required) ─────────────────────────────────────
+app.get("/api/projects/public", async (_req, res) => {
+  try {
+    res.json(projectsStore.filter((p) => p.featured).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch projects" });
+  }
+});
+
+// ── Contact form (public) ──────────────────────────────────────────────────
+
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, phone, subject, message } = req.body;
+    const cleanName = typeof name === "string" ? name.trim() : "";
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
+    const cleanSubject = typeof subject === "string" ? subject.trim() : "";
+    const cleanMessage = typeof message === "string" ? message.trim() : "";
+
+    if (!cleanName || !cleanEmail || !cleanSubject || !cleanMessage) {
+      return res.status(400).json({ error: "Name, email, subject, and message are required" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: "Please provide a valid email address" });
+    }
+    if (cleanMessage.length > 5000) {
+      return res.status(400).json({ error: "Message is too long (max 5000 characters)" });
+    }
+
+    const [created] = await db
+      .insert(contactMessages)
+      .values({
+        name: cleanName.slice(0, 120),
+        email: cleanEmail.slice(0, 160),
+        phone: phone ? String(phone).trim().slice(0, 40) : null,
+        subject: cleanSubject.slice(0, 200),
+        message: cleanMessage.slice(0, 5000),
+      })
+      .returning();
+
+    res.status(201).json(created);
+  } catch (error) {
+    console.error("Create contact message error:", error);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// ── Contact messages inbox (admin) ──────────────────────────────────────────
+
+function isAdminUser(user: any): boolean {
+  return user && user.role === "admin";
+}
+
+app.get("/api/contact-messages", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const messages = await db
+      .select()
+      .from(contactMessages)
+      .orderBy(sql`${contactMessages.createdAt} DESC NULLS LAST`);
+    res.json(messages);
+  } catch (error) {
+    console.error("Fetch contact messages error:", error);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+app.patch("/api/contact-messages/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { status } = req.body;
+    if (status !== "new" && status !== "read") {
+      return res.status(400).json({ error: "Status must be 'new' or 'read'" });
+    }
+    const id = req.params.id as string;
+    const [updated] = await db
+      .update(contactMessages)
+      .set({ status })
+      .where(eq(contactMessages.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Message not found" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Update contact message error:", error);
+    res.status(500).json({ error: "Failed to update message" });
+  }
+});
+
+app.delete("/api/contact-messages/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const id = req.params.id as string;
+    await db.delete(contactMessages).where(eq(contactMessages.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete contact message error:", error);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
 // ── Start Server ────────────────────────────────────────────────────────────
 
 const PORT = process.env.API_PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log(`PrintHub API server running on port ${PORT}`);
-});
+// Keep the contact_messages table in sync on boot. The schema is also
+// declared in src/db/schema.ts for drizzle tooling; this guarantees the table
+// exists even when migrations can't be run from the terminal environment.
+async function ensureContactMessagesTable() {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS contact_messages (
+        id uuid primary key default gen_random_uuid(),
+        name text not null,
+        email text not null,
+        phone text,
+        subject text not null,
+        message text not null,
+        status text not null default 'new',
+        created_at timestamptz default now()
+      )
+    `);
+    console.log("contact_messages table ready");
+  } catch (error) {
+    console.error("Failed to ensure contact_messages table:", error);
+  }
+}
+
+// Additive schema sync for columns added after the DB was first provisioned.
+// Declared in src/db/schema.ts for drizzle tooling; ALTER … IF NOT EXISTS keeps
+// this safe to run on every boot.
+async function ensureNewColumns() {
+  try {
+    await db.execute(sql`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS items jsonb DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS notes text
+    `);
+    await db.execute(sql`
+      ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS customer_id uuid REFERENCES users(id)
+    `);
+    console.log("orders/chat_threads schema up to date");
+  } catch (error) {
+    console.error("Failed to sync schema columns:", error);
+  }
+}
+
+ensureContactMessagesTable()
+  .then(ensureNewColumns)
+  .then(() => {
+    // On Vercel the platform imports this module as a serverless function and
+    // manages its own listener — only bind a port when run directly (local dev).
+    if (!process.env.VERCEL) {
+      app.listen(PORT, () => {
+        console.log(`PrintHub API server running on port ${PORT}`);
+      });
+    } else {
+      console.log("PrintHub API running as a Vercel serverless function");
+    }
+  });
+
+export default app;

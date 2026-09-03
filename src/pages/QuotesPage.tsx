@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FileText, Send, Check, X, ArrowRight } from "lucide-react";
+import { FileText, Send, Check, X, ArrowRight, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ export default function QuotesPage() {
   const { refetch: refetchJobs } = useJobs();
   const { toast } = useToast();
   const [converting, setConverting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const filteredQuotes = activeTab === "all"
     ? quotes || []
@@ -66,6 +67,29 @@ export default function QuotesPage() {
       });
     } finally {
       setConverting(null);
+    }
+  };
+
+  const handleDeleteQuote = async (quoteId: string) => {
+    if (!confirm("Delete this quote? This cannot be undone.")) return;
+    setDeleting(quoteId);
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        toast({ title: "Quote deleted", variant: "success" });
+        refetch();
+      } else {
+        const err = await response.json();
+        toast({ title: "Failed to delete", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete quote", variant: "destructive" });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -128,7 +152,18 @@ export default function QuotesPage() {
                               {new Date(quote.createdAt).toLocaleDateString()}
                             </p>
                           </div>
-                          <Badge variant={config.color}>{config.label}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={config.color}>{config.label}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-[var(--text-tertiary)] hover:text-red-500"
+                              onClick={() => handleDeleteQuote(quote.id)}
+                              disabled={deleting === quote.id}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
 
                         {quote.lines && quote.lines.length > 0 && (

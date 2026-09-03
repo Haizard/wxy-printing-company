@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatTZS, cmToSqm } from "@/lib/utils";
+import { useSearchParams } from "react-router-dom";
 import { useProducts, useCategories } from "@/hooks/useApi";
 import { useCart } from "@/contexts/CartContext";
 
@@ -109,6 +110,8 @@ export default function CalculatorPage() {
   const { data: products, loading: prodsLoading } = useProducts();
   const { data: categories, loading: catsLoading } = useCategories();
   const { addItem } = useCart();
+  const [searchParams] = useSearchParams();
+  const urlProductId = searchParams.get("product");
 
   const selectedProduct = products?.find((p: any) => p.id === selectedProductId);
 
@@ -141,6 +144,17 @@ export default function CalculatorPage() {
     };
     fetchOptions();
   }, [selectedProductId]);
+
+  // Support ?product=<id> deep links (e.g. from the product catalogue): jump
+  // straight into the details step for that product once the list has loaded.
+  useEffect(() => {
+    if (!urlProductId || !products?.length || selectedProductId) return;
+    const target = products.find((p: any) => p.id === urlProductId);
+    if (target) {
+      setSelectedProductId(target.id);
+      setStep("details");
+    }
+  }, [urlProductId, products, selectedProductId]);
   const selectedCategory = categories?.find((c: any) => c.id === selectedProduct?.categoryId);
 
   // Calculate price via server-side API (queries DB price rules)

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History } from "lucide-react";
+import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useJobs } from "@/hooks/useApi";
 import { useToast } from "@/components/ui/use-toast";
+import { compressImageFile, readFileAsBase64 } from "@/lib/image-utils";
 
 type JobStatus = "confirmed" | "in_production" | "qa" | "ready" | "delivered";
 
@@ -100,15 +104,22 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
   if (!job) return null;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-[rgba(60,60,67,0.15)]">
+    <Card className="overflow-hidden">        <div className="flex items-center justify-between p-4 border-b border-[rgba(60,60,67,0.15)]">
         <div>
           <h3 className="text-headline font-semibold">{job.jobNumber}</h3>
           <p className="text-subhead text-[var(--text-secondary)]">{job.title}</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="text-[var(--text-tertiary)] hover:text-red-500" onClick={() => {
+            if (!confirm("Delete this job?")) return;
+            fetch(`/api/jobs/${jobId}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } }).then(r => { if (r.ok) { onClose(); window.location.reload(); } });
+          }}>
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
@@ -148,41 +159,94 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                e.target.value = "";
                 setUploading(true);
                 try {
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const base64 = reader.result as string;
-                    const token = localStorage.getItem("printhub_token");
-                    const res = await fetch(`/api/jobs/${jobId}/files`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({
-                        fileUrl: base64,
-                        fileType: "artwork",
-                      }),
+                  if (file.size > 60 * 1024 * 1024) {
+                    toast({
+                      title: "File too large",
+                      description: "Please upload a file smaller than ~40 MB.",
+                      variant: "destructive",
                     });
-                    if (res.ok) {
-                      const newFile = await res.json();
-                      setJob((prev: any) => ({
-                        ...prev,
-                        files: [...(prev.files || []), newFile],
-                      }));
-                      toast({ title: "File uploaded", description: file.name });
-                    } else {
-                      toast({ title: "Upload failed", variant: "destructive" });
+                    return;
+                  }
+                  // Compress images client-side so artwork photos don't blow
+                  // the server body limit (previously failed with 413); other
+                  // formats (PDF/AI/EPS/PSD/CDR) are sent as-is.
+                  const isImage = file.type.startsWith("image/");
+                  const base64 = isImage
+                    ? await compressImageFile(file)
+                    : await readFileAsBase64(file);
+
+                  if (!base64) {
+                    toast({
+                      title: "Could not read file",
+                      description: "The file format is unsupported or the file is unreadable.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  if (base64.length > 55 * 1024 * 1024) {
+                    toast({
+                      title: "File too large",
+                      description: "Please upload a file smaller than ~40 MB.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  const token = localStorage.getItem("printhub_token");
+                  const res = await fetch(`/api/jobs/${jobId}/files`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      fileUrl: base64,
+                      fileType: "artwork",
+                    }),
+                  });
+                  if (res.ok) {
+                    const newFile = await res.json();
+                    setJob((prev: any) => ({
+                      ...prev,
+                      files: [...(prev.files || []), newFile],
+                    }));
+                    toast({ title: "File uploaded", description: file.name });
+                  } else {
+                    let detail: string | undefined;
+                    try {
+                      const body = await res.json();
+                      if (body?.error) detail = body.error;
+                    } catch {
+                      // non-JSON error body — keep generic message
                     }
-                    setUploading(false);
-                  };
-                  reader.readAsDataURL(file);
-                } catch {
-                  toast({ title: "Upload failed", variant: "destructive" });
+                    toast({
+                      title:
+                        res.status === 413
+                          ? "File too large for server"
+                          : "Upload failed",
+                      description:
+                        detail ||
+                        (res.status === 413
+                          ? "The server rejected this file. Try a smaller version or a compressed PDF."
+                          : undefined),
+                      variant: "destructive",
+                    });
+                  }
+                } catch (err) {
+                  toast({
+                    title: "Upload failed",
+                    description:
+                      err instanceof Error
+                        ? err.message
+                        : "Something went wrong while uploading the file.",
+                    variant: "destructive",
+                  });
+                } finally {
                   setUploading(false);
                 }
-                e.target.value = "";
               }}
             />
             <Button
@@ -271,7 +335,7 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
   );
 }
 
-function JobCard({ job, onMove, onExpand }: { job: any; onMove: (id: string, status: string) => void; onExpand: (id: string) => void }) {
+function JobCard({ job, onMove, onExpand, onDelete }: { job: any; onMove: (id: string, status: string) => void; onExpand: (id: string) => void; onDelete: (id: string) => void }) {
   const col = columns.find((c) => c.status === job.status);
   return (
     <Card className="cursor-pointer hover:shadow-[var(--glass-shadow)] transition-all duration-200 hover:scale-[0.98]">
@@ -288,6 +352,13 @@ function JobCard({ job, onMove, onExpand }: { job: any; onMove: (id: string, sta
             <Badge variant={priorityColors[job.priority] || "default"} className="text-[10px] px-1.5 py-0">
               {job.priority}
             </Badge>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(job.id); }}
+              className="text-[var(--text-tertiary)] hover:text-red-500 p-0.5"
+              title="Delete job"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
             <ChevronDown className="w-4 h-4 text-[var(--text-tertiary)]" />
           </div>
         </div>
@@ -334,6 +405,66 @@ export default function JobsPage() {
   const { data: jobs, loading, refetch } = useJobs();
   const { toast } = useToast();
 
+  // Admin job creation
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [jobForm, setJobForm] = useState({ title: "", priority: "normal", dueDate: "", notes: "" });
+  const [creating, setCreating] = useState(false);
+
+  const handleCreateJob = async () => {
+    if (!jobForm.title.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    setCreating(true);
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: jobForm.title,
+          priority: jobForm.priority,
+          dueDate: jobForm.dueDate || null,
+          notes: jobForm.notes,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: "Job created", variant: "success" });
+        setCreateDialogOpen(false);
+        setJobForm({ title: "", priority: "normal", dueDate: "", notes: "" });
+        refetch();
+      } else {
+        const err = await res.json();
+        toast({ title: err.error || "Failed to create job", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to create job", variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm("Delete this job? This cannot be undone.")) return;
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        toast({ title: "Job deleted", variant: "success" });
+        if (expandedJob === jobId) setExpandedJob(null);
+        refetch();
+      } else {
+        const err = await response.json();
+        toast({ title: "Failed to delete", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete job", variant: "destructive" });
+    }
+  };
+
   const allJobs = jobs || [];
   const filteredJobs = activeTab === "all" ? allJobs : allJobs.filter((j: any) => j.status === activeTab);
 
@@ -372,10 +503,17 @@ export default function JobsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Jobs</h1>
-        <p className="text-body text-[var(--text-secondary)] mt-1">
-          Track and manage your production jobs
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Jobs</h1>
+            <p className="text-body text-[var(--text-secondary)] mt-1">
+              Track and manage your production jobs
+            </p>
+          </div>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New Job
+          </Button>
+        </div>
       </motion.div>
 
       {/* Expanded job detail */}
@@ -415,7 +553,7 @@ export default function JobsPage() {
                   </div>
                   <div className="space-y-3">
                     {colJobs.map((job: any) => (
-                      <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} />
+                      <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} />
                     ))}
                     {colJobs.length === 0 && (
                       <div className="text-center py-6 text-caption text-[var(--text-tertiary)]">
@@ -442,7 +580,7 @@ export default function JobsPage() {
               <TabsContent value={activeTab}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   {filteredJobs.map((job: any) => (
-                    <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} />
+                    <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} />
                   ))}
                 </div>
               </TabsContent>
@@ -450,6 +588,61 @@ export default function JobsPage() {
           </div>
         </>
       )}
+
+      {/* Create Job Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Job</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label>Job Title *</Label>
+              <Input
+                value={jobForm.title}
+                onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
+                placeholder="e.g. Business Cards for ABC Ltd"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={jobForm.dueDate}
+                  onChange={(e) => setJobForm({ ...jobForm, dueDate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Input
+                value={jobForm.notes}
+                onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
+                placeholder="Optional notes about this job"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button className="flex-1" onClick={handleCreateJob} disabled={creating}>
+                {creating ? "Creating..." : "Create Job"}
+              </Button>
+              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

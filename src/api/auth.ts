@@ -1,12 +1,12 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { db } from "../db/index";
+import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || "printhub-dev-secret-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || "wxy-solutions-dev-secret-change-in-production";
 const SALT_ROUNDS = 10;
 
 // ── Register ────────────────────────────────────────────────────────────────

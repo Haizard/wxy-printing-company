@@ -7,10 +7,8 @@ export function Header() {
       <div className="flex items-center justify-between px-4 lg:px-6 h-14">
         {/* Mobile title */}
         <div className="lg:hidden flex items-center gap-3">
-          <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-gradient-to-br from-[var(--accent-primary)] to-[#E84530] flex items-center justify-center">
-            <span className="text-white font-bold text-sm">P</span>
-          </div>
-          <h1 className="text-headline font-semibold">PrintHub</h1>
+          <img src="/wxy-logo.svg" alt="WXY" className="h-8 w-auto" />
+          <h1 className="text-headline font-semibold">WXY Business Solutions</h1>
         </div>
 
         {/* Desktop search */}

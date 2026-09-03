@@ -8,13 +8,53 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "react-router-dom";
 
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { login, register } = useAuth();
+
+  // Staff-area routes live behind the admin panel — clients must never be
+  // dropped back into them after signing in.
+  const STAFF_AREA_PREFIXES = [
+    "/dashboard",
+    "/catalog",
+    "/calculator",
+    "/quotes",
+    "/orders",
+    "/jobs",
+    "/inventory",
+    "/reports",
+    "/price-rules",
+    "/projects",
+    "/messages",
+    "/users",
+    "/settings",
+    "/chat",
+    "/cart",
+  ];
+
+  // When a guest was sent here from a protected page (client orders, chat…),
+  // send them back there after sign-in. Otherwise route by role: clients land
+  // in their own area, staff in the dashboard.
+  const getReturnPath = (role?: string) => {
+    const from = (location.state as any)?.from;
+    const fromPath = from?.pathname && from.pathname !== "/auth" ? from.pathname : "";
+    const isStaffArea = STAFF_AREA_PREFIXES.some(
+      (prefix) => fromPath === prefix || fromPath.startsWith(prefix + "/"),
+    );
+    if (role === "customer" && (!fromPath || isStaffArea)) {
+      return "/client";
+    }
+    if (fromPath) {
+      return fromPath + (from.search || "") + (from.hash || "");
+    }
+    return "/dashboard";
+  };
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -24,13 +64,13 @@ export default function AuthPage() {
     const password = formData.get("password") as string;
 
     try {
-      await login(email, password);
+      const account = await login(email, password);
       toast({
         title: "Welcome back!",
         description: "You've been signed in successfully.",
         variant: "success",
       });
-      navigate("/dashboard");
+      navigate(getReturnPath(account?.role), { replace: true });
     } catch (err: any) {
       toast({
         title: "Sign in failed",
@@ -51,13 +91,13 @@ export default function AuthPage() {
     const password = formData.get("signup-password") as string;
 
     try {
-      await register({ fullName, email, password });
+      const account = await register({ fullName, email, password });
       toast({
-        title: "Welcome to PrintHub!",
-        description: "Your account has been created.",
+        title: "Welcome to WXY Business Solutions!",
+        description: "Your client account has been created.",
         variant: "success",
       });
-      navigate("/dashboard");
+      navigate(getReturnPath(account?.role), { replace: true });
     } catch (err: any) {
       toast({
         title: "Registration failed",
@@ -92,14 +132,17 @@ export default function AuthPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--accent-primary)] to-[#E84530] flex items-center justify-center shadow-[0_4px_20px_rgba(255,90,60,0.3)] mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">P</span>
-          </div>
+          <img
+            src="/wxy-logo.svg"
+            alt="WXY Business Solutions"
+            className="h-12 w-auto mx-auto mb-4"
+          />
           <h1 className="text-title-1 font-bold text-[var(--text-primary)]">
-            Welcome to PrintHub
+            Welcome to WXY Business Solutions
           </h1>
           <p className="text-subhead text-[var(--text-secondary)] mt-2">
-            Sign in to manage your printing business
+            Clients place requests and chat with our team — staff manage the
+            platform.
           </p>
         </div>
 
@@ -211,8 +254,8 @@ export default function AuthPage() {
         </div>
 
         <p className="text-center text-caption text-[var(--text-tertiary)] mt-6">
-          By continuing, you agree to PrintHub's Terms of Service and Privacy
-          Policy.
+          By continuing, you agree to WXY Business Solutions' Terms of Service
+          and Privacy Policy.
         </p>
       </motion.div>
     </div>

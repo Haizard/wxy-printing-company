@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, CreditCard, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { ShoppingCart, CreditCard, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,26 @@ export default function OrdersPage() {
       toast({ title: "Error", description: "Failed to update order", variant: "destructive" });
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm("Delete this order? This cannot be undone.")) return;
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        toast({ title: "Order deleted", variant: "success" });
+        refetch();
+      } else {
+        const err = await response.json();
+        toast({ title: "Failed to delete", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete order", variant: "destructive" });
     }
   };
 
@@ -127,6 +147,14 @@ export default function OrdersPage() {
                           <CreditCard className="w-3 h-3" />
                           {order.paymentMethod || "Cash"}
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-[var(--text-tertiary)] hover:text-red-500"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </div>
                     </div>
@@ -139,6 +167,59 @@ export default function OrdersPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="border-t border-[rgba(60,60,67,0.15)] p-5"
                       >
+                        {/* Requested items / notes (client order requests) */}
+                        {((Array.isArray(order.items) && order.items.length > 0) ||
+                          order.notes ||
+                          order.customerName) && (
+                          <div className="mb-5 space-y-3">
+                            {Array.isArray(order.items) && order.items.length > 0 && (
+                              <div>
+                                <p className="text-caption text-[var(--text-tertiary)] mb-1">
+                                  Requested items
+                                </p>
+                                <div className="space-y-1">
+                                  {order.items.map((item: any, i: number) => (
+                                    <p
+                                      key={i}
+                                      className="text-subhead font-medium flex items-center justify-between gap-3"
+                                    >
+                                      <span>{item.name}</span>
+                                      <span className="text-caption text-[var(--text-tertiary)]">
+                                        {item.quantity} ×{" "}
+                                        {item.price > 0
+                                          ? formatTZS(item.price)
+                                          : "unpriced (awaiting quote)"}
+                                      </span>
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {order.customerName && (
+                              <p className="text-caption text-[var(--text-secondary)]">
+                                Customer:{" "}
+                                <span className="font-semibold">
+                                  {order.customerName}
+                                </span>
+                              </p>
+                            )}
+                            {order.notes && (
+                              <p className="text-caption text-[var(--text-secondary)] bg-[var(--glass-fill-subtle)] rounded-[var(--radius-sm)] px-3 py-2">
+                                {order.notes}
+                              </p>
+                            )}
+                            {order.total === 0 &&
+                              Array.isArray(order.items) &&
+                              order.items.length > 0 && (
+                                <p className="text-caption font-medium text-[var(--accent-warning)]">
+                                  Client request — confirm specs &amp; price with
+                                  the customer (use the Calculator to quote), then
+                                  update this order.
+                                </p>
+                              )}
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
                           <div>
                             <p className="text-caption text-[var(--text-tertiary)]">Order Total</p>

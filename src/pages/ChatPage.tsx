@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Send, Paperclip, Image, Plus, MessageSquare, Search, RefreshCw } from "lucide-react";
+import { Send, Paperclip, Image, Plus, MessageSquare, Search, RefreshCw, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,77 @@ export default function ChatPage() {
   const { data: jobs } = useJobs();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const createdDeepLink = useRef(false);
+  const isCustomer = user?.role === "customer";
+
+  // Deep link from the product page: /chat?open=1&product=<id>&name=<name>
+  // or /client/chat?open=1&order=<orderNumber>&... (requires sign-in —
+  // RequireAuth sends guests to /auth first, then they come back here with the
+  // query intact). Auto-creates an inquiry thread owned by the client.
+  useEffect(() => {
+    const open = searchParams.get("open");
+    const productId = searchParams.get("product");
+    const productName = searchParams.get("name");
+    const orderNumber = searchParams.get("order");
+    if (createdDeepLink.current || open !== "1") return;
+    if (!productId && !orderNumber) return;
+    createdDeepLink.current = true;
+    (async () => {
+      try {
+        const token = localStorage.getItem("printhub_token");
+        const res = await fetch("/api/chat/threads", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ jobId: null }),
+        });
+        if (res.ok) {
+          const thread = await res.json();
+          const intro = orderNumber
+            ? `Hi! I just placed request ${orderNumber}${
+                productName ? ` for "${productName}"` : ""
+              }. Could you confirm the details and next steps?`
+            : `Hi! I'd like to get a quote for "${productName || "a product"}". Could you share the next steps with me?`;
+          await fetch(`/api/chat/threads/${thread.id}/messages`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ body: intro }),
+          }).catch(() => null);
+          setThreads((prev) => [
+            { ...thread, jobInfo: null, lastMessage: null, messageCount: 0 },
+            ...prev,
+          ]);
+          setSelectedThread(thread.id);
+          toast({
+            title: "Chat started",
+            description: orderNumber
+              ? `Conversation about ${orderNumber} opened`
+              : `Inquiry about ${productName || "this product"} opened`,
+            variant: "success",
+          });
+        }
+      } catch {
+        toast({
+          title: "Could not start chat",
+          description: "Please try again in a moment.",
+          variant: "destructive",
+        });
+      } finally {
+        const next = new URLSearchParams(searchParams);
+        next.delete("open");
+        next.delete("product");
+        next.delete("name");
+        next.delete("order");
+        setSearchParams(next, { replace: true });
+      }
+    })();
+  }, [searchParams, setSearchParams, toast]);
 
   // Fetch threads
   const fetchThreads = async () => {
@@ -126,8 +198,9 @@ export default function ChatPage() {
     }
   };
 
-  // Create new thread (with or without a job)
+  // Create new thread (staff only — with or without a job)
   const handleCreateThread = async (isInternal: boolean = false) => {
+    if (isCustomer) return;
     try {
       const token = localStorage.getItem("printhub_token");
       const response = await fetch("/api/chat/threads", {
@@ -154,10 +227,37 @@ export default function ChatPage() {
     }
   };
 
+  // Delete thread
+  const handleDeleteThread = async (threadId: string) => {
+    if (!confirm("Delete this thread and all its messages?")) return;
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/chat/threads/${threadId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        toast({ title: "Thread deleted", variant: "success" });
+        if (selectedThread === threadId) {
+          setSelectedThread(null);
+          setMessages([]);
+        }
+        fetchThreads();
+      } else {
+        const err = await response.json();
+        toast({ title: "Failed to delete", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete thread", variant: "destructive" });
+    }
+  };
+
   const getThreadTitle = (thread: any) => {
     if (thread.jobInfo) {
       return `${thread.jobInfo.jobNumber} — ${thread.jobInfo.title}`;
     }
+    if (isCustomer) return "Customer Service";
+    if (thread.customerName) return thread.customerName;
     return thread.isInternal ? "Staff Discussion" : "General Chat";
   };
 
@@ -166,6 +266,7 @@ export default function ChatPage() {
       const msgPreview = thread.lastMessage.body?.substring(0, 40) || "";
       return msgPreview + (thread.lastMessage.body?.length > 40 ? "..." : "");
     }
+    if (isCustomer) return "Ask us anything about your requests";
     return thread.isInternal ? "Internal staff thread" : "No messages yet";
   };
 
@@ -185,18 +286,24 @@ export default function ChatPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Chat</h1>
+          <h1 className="text-title-1 font-bold text-[var(--text-primary)]">
+            {isCustomer ? "Chat with us" : "Chat"}
+          </h1>
           <p className="text-body text-[var(--text-secondary)] mt-1">
-            Messages with customers on job threads
+            {isCustomer
+              ? "Talk to customer service about your requests and orders."
+              : "Messages with customers on job threads"}
           </p>
         </div>
         <Dialog open={newThreadOpen} onOpenChange={setNewThreadOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-1" />
-              New Thread
-            </Button>
-          </DialogTrigger>
+          {!isCustomer && (
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-1" />
+                New Thread
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Chat Thread</DialogTitle>
@@ -260,7 +367,11 @@ export default function ChatPage() {
                     {threads.length === 0 ? "No conversations yet" : "No matching threads"}
                   </p>
                   <p className="text-caption text-[var(--text-tertiary)]">
-                    {threads.length === 0 ? "Create a thread to start chatting" : "Try a different search"}
+                    {threads.length === 0
+                      ? isCustomer
+                        ? "Open a product and hit \"Chat with us\" to start"
+                        : "Create a thread to start chatting"
+                      : "Try a different search"}
                   </p>
                 </div>
               ) : (
@@ -292,9 +403,18 @@ export default function ChatPage() {
                         {getThreadSubtitle(thread)}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end flex-shrink-0">
+                    <div className="flex flex-col items-end flex-shrink-0 gap-1">
+                      {!isCustomer && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteThread(thread.id); }}
+                          className="text-[var(--text-tertiary)] hover:text-red-500 p-0.5"
+                          title="Delete thread"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                       {thread.messageCount > 0 && (
-                        <Badge variant="default" className="text-[9px] mb-1">{thread.messageCount}</Badge>
+                        <Badge variant="default" className="text-[9px]">{thread.messageCount}</Badge>
                       )}
                       {thread.lastMessage && (
                         <span className="text-[10px] text-[var(--text-tertiary)]">
@@ -335,18 +455,36 @@ export default function ChatPage() {
                         {getThreadTitle(threads.find((t) => t.id === selectedThread) || {})}
                       </p>
                       <p className="text-caption text-[var(--text-tertiary)]">
-                        {threads.find((t) => t.id === selectedThread)?.isInternal ? "Staff Chat" : "Customer Chat"}
+                        {isCustomer
+                          ? "Customer Service"
+                          : threads.find((t) => t.id === selectedThread)?.isInternal
+                            ? "Staff Chat"
+                            : "Customer Chat"}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fetchMessages(selectedThread)}
-                    className="text-[var(--text-tertiary)]"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => fetchMessages(selectedThread)}
+                      className="text-[var(--text-tertiary)]"
+                      title="Refresh messages"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    {!isCustomer && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteThread(selectedThread)}
+                        className="text-[var(--text-tertiary)] hover:text-red-500"
+                        title="Delete thread"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Messages */}

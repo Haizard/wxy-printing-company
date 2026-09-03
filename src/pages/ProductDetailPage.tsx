@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFetch } from "@/hooks/useApi";
+import ImageSlideshow from "@/components/ui/ImageSlideshow";
 
 const categoryColors: Record<string, string> = {
   "digital-printing": "from-blue-500 to-blue-600",
@@ -108,13 +109,23 @@ export default function ProductDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 + index * 0.05 }}
           >
-            <Card className="h-full hover:shadow-[var(--glass-shadow)] transition-all duration-200 hover:scale-[0.98]">
-              {/* Product image placeholder */}
-              <div
-                className={`h-36 rounded-t-[var(--radius-lg)] bg-gradient-to-br ${colorClass} flex items-center justify-center opacity-90`}
-              >
-                <span className="text-4xl opacity-80">🖨️</span>
-              </div>
+            <Card className="h-full hover:shadow-[var(--glass-shadow)] transition-all duration-200 hover:scale-[0.98] overflow-hidden">
+              {/* Product image / slideshow */}
+              {product.images && product.images.length > 0 ? (
+                <ImageSlideshow
+                  images={product.images}
+                  alt={product.name}
+                  className="h-36 rounded-t-[var(--radius-lg)]"
+                  showDots={product.images.length > 1}
+                  showArrows={product.images.length > 1}
+                />
+              ) : (
+                <div
+                  className={`h-36 rounded-t-[var(--radius-lg)] bg-gradient-to-br ${colorClass} flex items-center justify-center opacity-90`}
+                >
+                  <span className="text-4xl opacity-80">🖨️</span>
+                </div>
+              )}
 
               <CardContent className="p-4 flex flex-col gap-3">
                 <div>
