@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Mail,
   LogOut,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +32,7 @@ const navItems = [
   { to: "/price-rules", icon: DollarSign, label: "Price Rules" },
   { to: "/projects", icon: FolderOpen, label: "Projects" },
   { to: "/messages", icon: Mail, label: "Contact Messages" },
+  { to: "/users", icon: Users, label: "Users", adminOnly: true },
 ];
 
 const bottomNavItems = [
@@ -38,7 +40,7 @@ const bottomNavItems = [
 ];
 
 export function Sidebar() {
-  const { logout } = useAuth();
+  const { user: currentUser, logout } = useAuth();
 
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 material-thick border-r border-[var(--glass-border)] overflow-hidden">
@@ -49,7 +51,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden min-h-0">
-        {navItems.map((item) => (
+        {navItems.filter((item) => !(item as any).adminOnly || currentUser?.role === "admin").map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
