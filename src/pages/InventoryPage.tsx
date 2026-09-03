@@ -59,7 +59,7 @@ export default function InventoryPage() {
   // Fetch material categories from API
   const fetchCategories = async () => {
     try {
-      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } });
       if (res.ok) setMaterialCategories(await res.json());
     } catch (e) { console.error("Failed to fetch categories", e); }
   };
@@ -67,7 +67,7 @@ export default function InventoryPage() {
   // Seed default categories if empty
   const seedDefaultCategories = async () => {
     try {
-      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } });
       if (res.ok) {
         const existing = await res.json();
         if (existing.length === 0) {
@@ -83,7 +83,7 @@ export default function InventoryPage() {
             { name: "Fabric & Textile", value: "fabric", color: "bg-[rgba(0,122,255,0.12)] text-[#007AFF]" },
           ];
           for (const cat of defaults) {
-            await fetch("/api/material-categories", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` }, body: JSON.stringify(cat) });
+            await fetch("/api/material-categories", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("printhub_token")}` }, body: JSON.stringify(cat) });
           }
           fetchCategories();
         }
@@ -95,7 +95,7 @@ export default function InventoryPage() {
     try {
       const method = editingCat ? "PUT" : "POST";
       const url = editingCat ? `/api/material-categories/${editingCat.id}` : "/api/material-categories";
-      await fetch(url, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` }, body: JSON.stringify(catForm) });
+      await fetch(url, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("printhub_token")}` }, body: JSON.stringify(catForm) });
       setCatDialogOpen(false); setEditingCat(null); setCatForm({ name: "", value: "", color: "", icon: "", sortOrder: 0 });
       fetchCategories();
     } catch (e) { console.error("Failed to save category", e); }
@@ -104,7 +104,7 @@ export default function InventoryPage() {
   const handleDeleteCategory = async (id: string) => {
     if (!confirm("Delete this category?")) return;
     try {
-      await fetch(`/api/material-categories/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      await fetch(`/api/material-categories/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } });
       fetchCategories();
     } catch (e) { console.error("Failed to delete category", e); }
   };
