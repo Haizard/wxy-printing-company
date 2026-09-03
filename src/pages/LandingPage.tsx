@@ -101,6 +101,8 @@ const heroSlides = [
 
 export default function LandingPage() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [testimonialPage, setTestimonialPage] = useState(0);
+  const testimonialPages = Math.ceil(testimonials.length / 3);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -108,6 +110,13 @@ export default function LandingPage() {
     }, 10000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTestimonialPage((prev) => (prev + 1) % testimonialPages);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [testimonialPages]);
 
   return (
     <div className="min-h-screen">
@@ -390,39 +399,65 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {testimonials.map((t, index) => (
+          <div className="overflow-hidden">
+            <AnimatePresence mode="wait">
               <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
-                className="h-full"
+                key={testimonialPage}
+                initial={{ opacity: 0, x: 60 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -60 }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
               >
-                <Card className="h-full flex flex-col">
-                  <div className="p-6 flex flex-col flex-1">
-                    <div className="flex items-center gap-1 mb-4">
-                      {Array.from({ length: t.rating }).map((_, i) => (
-                        <Star key={i} className="w-4 h-4 fill-[var(--accent-secondary)] text-[var(--accent-secondary)]" />
-                      ))}
-                    </div>
-                    <Quote className="w-6 h-6 text-[var(--accent-primary)] opacity-30 mb-2" />
-                    <p className="text-body text-[var(--text-primary)] mb-5 flex-1">
-                      {t.quote}
-                    </p>
-                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-[var(--glass-border)]">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-tertiary)] flex items-center justify-center text-white font-bold text-caption">
-                        {t.name.split(" ").map((n) => n[0]).join("")}
+                {testimonials.slice(testimonialPage * 3, testimonialPage * 3 + 3).map((t, index) => (
+                  <motion.div
+                    key={t.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: index * 0.12 }}
+                    className="h-full"
+                  >
+                    <Card className="h-full flex flex-col">
+                      <div className="p-6 flex flex-col flex-1">
+                        <div className="flex items-center gap-1 mb-4">
+                          {Array.from({ length: t.rating }).map((_, i) => (
+                            <Star key={i} className="w-4 h-4 fill-[var(--accent-secondary)] text-[var(--accent-secondary)]" />
+                          ))}
+                        </div>
+                        <Quote className="w-6 h-6 text-[var(--accent-primary)] opacity-30 mb-2" />
+                        <p className="text-body text-[var(--text-primary)] mb-5 flex-1">
+                          {t.quote}
+                        </p>
+                        <div className="flex items-center gap-3 mt-auto pt-4 border-t border-[var(--glass-border)]">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-tertiary)] flex items-center justify-center text-white font-bold text-caption">
+                            {t.name.split(" ").map((n) => n[0]).join("")}
+                          </div>
+                          <div>
+                            <p className="text-subhead font-semibold text-[var(--text-primary)]">{t.name}</p>
+                            <p className="text-caption text-[var(--text-tertiary)]">{t.role}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-subhead font-semibold text-[var(--text-primary)]">{t.name}</p>
-                        <p className="text-caption text-[var(--text-tertiary)]">{t.role}</p>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
+                    </Card>
+                  </motion.div>
+                ))}
               </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Slide indicators */}
+          <div className="flex items-center justify-center gap-2 mt-8">
+            {Array.from({ length: testimonialPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setTestimonialPage(i)}
+                className={`rounded-full transition-all duration-300 ${
+                  i === testimonialPage
+                    ? "w-8 h-2 bg-[var(--accent-primary)]"
+                    : "w-2 h-2 bg-[var(--text-tertiary)] hover:bg-[var(--text-secondary)]"
+                }`}
+                aria-label={`Go to testimonial page ${i + 1}`}
+              />
             ))}
           </div>
 
