@@ -28,6 +28,8 @@ import ContactPage from "@/pages/ContactPage";
 import ContactMessagesPage from "@/pages/ContactMessagesPage";
 import ClientOrdersPage from "@/pages/ClientOrdersPage";
 import ClientDashboardPage from "@/pages/ClientDashboardPage";
+import SuppliersPage from "@/pages/SuppliersPage";
+import PurchaseOrdersPage from "@/pages/PurchaseOrdersPage";
 
 export default function App() {
   return (
@@ -68,6 +70,8 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/users" element={<RequireAuth allowedRoles={["admin"]}><UsersPage /></RequireAuth>} />
           <Route path="/messages" element={<RequireAuth allowedRoles={["admin"]}><ContactMessagesPage /></RequireAuth>} />
+          <Route path="/suppliers" element={<RequireAuth allowedRoles={["admin", "inventory_manager"]}><SuppliersPage /></RequireAuth>} />
+          <Route path="/purchase-orders" element={<RequireAuth allowedRoles={["admin", "inventory_manager"]}><PurchaseOrdersPage /></RequireAuth>} />
         </Route>
 
         {/* Client area — only for registered customers, no admin panel access */}

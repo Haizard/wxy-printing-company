@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus } from "lucide-react";
+import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus, Package } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -38,31 +38,84 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
   const [note, setNote] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [issueForm, setIssueForm] = useState({ inventoryItemId: "", quantity: 1, notes: "" });
+  const [issuing, setIssuing] = useState(false);
+  const [returnForm, setReturnForm] = useState<{ [key: string]: { used: number; returned: number; waste: number; wasteReason: string } }>({});
   const { toast } = useToast();
   const { user } = useAuth();
   const role = user?.role;
-  const canManage = role === "admin" || role === "sales";
+  const canManage = role === "admin" || role === "sales" || role === "production";
 
   useEffect(() => {
     const fetchJob = async () => {
       try {
         const token = localStorage.getItem("printhub_token");
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setJob(data);
-          setHistory(data.history || []);
-        }
+        const [jobRes, matRes, invRes] = await Promise.all([
+          fetch(`/api/jobs/${jobId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/material-issuances?jobId=${jobId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/inventory`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        if (jobRes.ok) { const data = await jobRes.json(); setJob(data); setHistory(data.history || []); }
+        if (matRes.ok) setMaterials(await matRes.json());
+        if (invRes.ok) setInventoryItems(await invRes.json());
       } catch {
-        console.error("Failed to fetch job");
+        console.error("Failed to fetch job data");
       } finally {
         setLoading(false);
       }
     };
     fetchJob();
   }, [jobId]);
+
+  const handleIssueMaterial = async () => {
+    if (!issueForm.inventoryItemId || issueForm.quantity <= 0) return;
+    setIssuing(true);
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const res = await fetch("/api/material-issuances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jobId, inventoryItemId: issueForm.inventoryItemId, quantityIssued: issueForm.quantity, notes: issueForm.notes || null }),
+      });
+      if (res.ok) {
+        toast({ title: "Material issued to job" });
+        setIssueForm({ inventoryItemId: "", quantity: 1, notes: "" });
+        // Refresh materials
+        const matRes = await fetch(`/api/material-issuances?jobId=${jobId}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (matRes.ok) setMaterials(await matRes.json());
+        const invRes = await fetch(`/api/inventory`, { headers: { Authorization: `Bearer ${token}` } });
+        if (invRes.ok) setInventoryItems(await invRes.json());
+      } else {
+        const data = await res.json();
+        toast({ title: data.error || "Failed", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const handleReturnMaterial = async (issuanceId: string) => {
+    const form = returnForm[issuanceId] || { used: 0, returned: 0, waste: 0, wasteReason: "" };
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const res = await fetch(`/api/material-issuances/${issuanceId}/return`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ quantityUsed: form.used, quantityReturned: form.returned, quantityWaste: form.waste, wasteReason: form.wasteReason || null }),
+      });
+      if (res.ok) {
+        toast({ title: "Material usage recorded" });
+        const matRes = await fetch(`/api/material-issuances?jobId=${jobId}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (matRes.ok) setMaterials(await matRes.json());
+      }
+    } catch {
+      toast({ title: "Failed", variant: "destructive" });
+    }
+  };
 
   const handleAddNote = async () => {
     if (!note.trim()) return;
@@ -282,6 +335,78 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
               <p className="text-caption text-[var(--text-tertiary)]">
                 No files uploaded yet
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Material Issuances */}
+        <div className="glass-card-subtle p-4 rounded-[var(--radius-md)]">
+          <div className="flex items-center gap-2 mb-3">
+            <Package className="w-4 h-4 text-[var(--text-secondary)]" />
+            <p className="text-subhead font-semibold">Materials Issued to this Job</p>
+          </div>
+
+          {/* Issue Form */}
+          <div className="grid grid-cols-12 gap-2 items-end mb-3">
+            <div className="col-span-5">
+              <Label className="text-caption">Material</Label>
+              <Select value={issueForm.inventoryItemId} onValueChange={(v) => setIssueForm({ ...issueForm, inventoryItemId: v })}>
+                <SelectTrigger className="h-8 text-caption"><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {inventoryItems.map((item: any) => (
+                    <SelectItem key={item.id} value={item.id}>{item.name} ({item.unit} - {item.currentQty} available)</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <Label className="text-caption">Qty</Label>
+              <Input type="number" value={issueForm.quantity} onChange={(e) => setIssueForm({ ...issueForm, quantity: Number(e.target.value) })} min={0.1} step="0.1" className="h-8 text-caption" />
+            </div>
+            <div className="col-span-3">
+              <Label className="text-caption">Notes</Label>
+              <Input value={issueForm.notes} onChange={(e) => setIssueForm({ ...issueForm, notes: e.target.value })} placeholder="Optional" className="h-8 text-caption" />
+            </div>
+            <div className="col-span-2">
+              <Button size="sm" onClick={handleIssueMaterial} disabled={issuing} className="w-full h-8">
+                {issuing ? "..." : <><Plus className="w-3 h-3 mr-1" /> Issue</>}
+              </Button>
+            </div>
+          </div>
+
+          {/* Materials List */}
+          {materials.length === 0 ? (
+            <p className="text-caption text-[var(--text-tertiary)] py-2">No materials issued yet</p>
+          ) : (
+            <div className="space-y-2">
+              {materials.map((mat: any) => (
+                <div key={mat.id} className="flex flex-col gap-2 p-3 rounded-[var(--radius-md)] bg-[rgba(255,255,255,0.2)] border border-[var(--glass-border)]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-subhead font-medium">{mat.itemName}</p>
+                      <p className="text-caption text-[var(--text-tertiary)]">Issued: {mat.quantityIssued} {mat.itemUnit} by {mat.issuedByName || "Staff"}</p>
+                    </div>
+                    <Badge variant={mat.status === "consumed" ? "default" : mat.status === "returned" ? "success" : "secondary"}>{mat.status}</Badge>
+                  </div>
+                  {mat.status !== "consumed" && mat.status !== "returned" && (
+                    <div className="grid grid-cols-4 gap-2 items-end">
+                      <div>
+                        <Label className="text-[10px]">Used</Label>
+                        <Input type="number" value={returnForm[mat.id]?.used ?? 0} onChange={(e) => setReturnForm({ ...returnForm, [mat.id]: { ...returnForm[mat.id], used: Number(e.target.value) } })} className="h-7 text-caption" min={0} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Returned</Label>
+                        <Input type="number" value={returnForm[mat.id]?.returned ?? 0} onChange={(e) => setReturnForm({ ...returnForm, [mat.id]: { ...returnForm[mat.id], returned: Number(e.target.value) } })} className="h-7 text-caption" min={0} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Waste</Label>
+                        <Input type="number" value={returnForm[mat.id]?.waste ?? 0} onChange={(e) => setReturnForm({ ...returnForm, [mat.id]: { ...returnForm[mat.id], waste: Number(e.target.value) } })} className="h-7 text-caption" min={0} />
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => handleReturnMaterial(mat.id)} className="h-7 text-caption">Record</Button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

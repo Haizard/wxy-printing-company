@@ -15,6 +15,8 @@ import {
   Mail,
   LogOut,
   Users,
+  Truck,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,6 +39,8 @@ const navItems: NavItem[] = [
   { to: "/orders", icon: ShoppingCart, label: "Orders", allowedRoles: ["admin", "sales"] },
   { to: "/jobs", icon: ClipboardList, label: "Jobs" },
   { to: "/inventory", icon: Package, label: "Inventory", allowedRoles: ["admin", "inventory_manager"] },
+  { to: "/suppliers", icon: Truck, label: "Suppliers", allowedRoles: ["admin", "inventory_manager"] },
+  { to: "/purchase-orders", icon: Receipt, label: "Purchase Orders", allowedRoles: ["admin", "inventory_manager"] },
   { to: "/chat", icon: MessageCircle, label: "Chat" },
   { to: "/reports", icon: BarChart3, label: "Reports", allowedRoles: ["admin", "sales"] },
   { to: "/price-rules", icon: DollarSign, label: "Price Rules", allowedRoles: ["admin"] },
