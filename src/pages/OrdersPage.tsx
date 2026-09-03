@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { formatTZS } from "@/lib/utils";
 import { useOrders } from "@/hooks/useApi";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Select,
   SelectContent,
@@ -25,8 +26,10 @@ const statusConfig: Record<string, { color: "default" | "secondary" | "success" 
 export default function OrdersPage() {
   const { data: orders, loading, refetch } = useOrders();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const canManage = user?.role === "admin" || user?.role === "sales";
 
   const updateOrderStatus = async (orderId: string, status: string, paymentMethod?: string) => {
     setUpdatingId(orderId);
@@ -147,14 +150,16 @@ export default function OrdersPage() {
                           <CreditCard className="w-3 h-3" />
                           {order.paymentMethod || "Cash"}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-[var(--text-tertiary)] hover:text-red-500"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-[var(--text-tertiary)] hover:text-red-500"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </div>
                     </div>
@@ -243,10 +248,12 @@ export default function OrdersPage() {
 
                         {/* Action buttons */}
                         <div className="flex items-center gap-3 flex-wrap">
+                          {canManage && (
                           <span className="text-subhead font-medium text-[var(--text-secondary)]">
                             Actions:
                           </span>
-                          {order.status === "pending" && (
+                          )}
+                          {canManage && order.status === "pending" && (
                             <>
                               <Button
                                 size="sm"
@@ -271,7 +278,7 @@ export default function OrdersPage() {
                               </Select>
                             </>
                           )}
-                          {order.status === "partially_paid" && (
+                          {canManage && order.status === "partially_paid" && (
                             <Button
                               size="sm"
                               onClick={() => updateOrderStatus(order.id, "paid")}
@@ -282,7 +289,7 @@ export default function OrdersPage() {
                               Mark Fully Paid
                             </Button>
                           )}
-                          {order.status === "cancelled" && (
+                          {canManage && order.status === "cancelled" && (
                             <Button
                               size="sm"
                               variant="outline"

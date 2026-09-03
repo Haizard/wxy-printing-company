@@ -50,6 +50,8 @@ export default function ReportsPage() {
   const lowStockItems = inventory?.filter((i: any) => parseFloat(i.currentQty) < parseFloat(i.reorderLevel)).length || 0;
   const totalStockValue = inventory?.reduce((s: number, i: any) => s + (i.unitCost || 0) * parseFloat(i.currentQty), 0) || 0;
 
+  const isAdmin = user?.role === "admin";
+
   const statCards = [
     {
       title: "Total Revenue",
@@ -75,14 +77,14 @@ export default function ReportsPage() {
       color: "text-[var(--accent-primary)]",
       bg: "bg-[rgba(255,90,60,0.1)]",
     },
-    {
+    ...(isAdmin ? [{
       title: "Conversion Rate",
       value: `${quotes?.length ? Math.round((quotesByStatus.converted / quotes.length) * 100) : 0}%`,
       subtitle: `${quotesByStatus.converted}/${quotes?.length || 0} converted`,
       icon: BarChart3,
       color: "text-[var(--accent-secondary)]",
       bg: "bg-[rgba(255,176,32,0.1)]",
-    },
+    }] : []),
   ];
 
   return (
@@ -204,7 +206,8 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        {/* Inventory Overview */}
+        {/* Inventory Overview — admin only */}
+        {isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle>Inventory Overview</CardTitle>
@@ -233,8 +236,10 @@ export default function ReportsPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Catalog Stats */}
+        {isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle>Catalog Overview</CardTitle>
@@ -263,6 +268,7 @@ export default function ReportsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

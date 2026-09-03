@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,6 +39,9 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const role = user?.role;
+  const canManage = role === "admin" || role === "sales";
 
   useEffect(() => {
     const fetchJob = async () => {
@@ -110,12 +114,14 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
           <p className="text-subhead text-[var(--text-secondary)]">{job.title}</p>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="text-[var(--text-tertiary)] hover:text-red-500" onClick={() => {
-            if (!confirm("Delete this job?")) return;
-            fetch(`/api/jobs/${jobId}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } }).then(r => { if (r.ok) { onClose(); window.location.reload(); } });
-          }}>
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {canManage && (
+            <Button variant="ghost" size="icon" className="text-[var(--text-tertiary)] hover:text-red-500" onClick={() => {
+              if (!confirm("Delete this job?")) return;
+              fetch(`/api/jobs/${jobId}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("printhub_token")}` } }).then(r => { if (r.ok) { onClose(); window.location.reload(); } });
+            }}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -335,8 +341,10 @@ function JobDetailPanel({ jobId, onClose }: { jobId: string; onClose: () => void
   );
 }
 
-function JobCard({ job, onMove, onExpand, onDelete }: { job: any; onMove: (id: string, status: string) => void; onExpand: (id: string) => void; onDelete: (id: string) => void }) {
+function JobCard({ job, onMove, onExpand, onDelete, userRole }: { job: any; onMove: (id: string, status: string) => void; onExpand: (id: string) => void; onDelete: (id: string) => void; userRole?: string }) {
   const col = columns.find((c) => c.status === job.status);
+  const canManageJob = userRole === "admin" || userRole === "sales";
+  const canAdvanceOnly = userRole === "production";
   return (
     <Card className="cursor-pointer hover:shadow-[var(--glass-shadow)] transition-all duration-200 hover:scale-[0.98]">
       <CardContent className="p-4">
@@ -352,13 +360,15 @@ function JobCard({ job, onMove, onExpand, onDelete }: { job: any; onMove: (id: s
             <Badge variant={priorityColors[job.priority] || "default"} className="text-[10px] px-1.5 py-0">
               {job.priority}
             </Badge>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(job.id); }}
-              className="text-[var(--text-tertiary)] hover:text-red-500 p-0.5"
-              title="Delete job"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {canManageJob && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(job.id); }}
+                className="text-[var(--text-tertiary)] hover:text-red-500 p-0.5"
+                title="Delete job"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             <ChevronDown className="w-4 h-4 text-[var(--text-tertiary)]" />
           </div>
         </div>
@@ -371,29 +381,31 @@ function JobCard({ job, onMove, onExpand, onDelete }: { job: any; onMove: (id: s
         )}
 
         {/* Status movement buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t border-[rgba(60,60,67,0.15)]">
-          {col?.prev && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => { e.stopPropagation(); onMove(job.id, col.prev!); }}
-              className="flex-1 text-[10px] h-7"
-            >
-              <ChevronLeft className="w-3 h-3 mr-1" />
-              {columns.find((c) => c.status === col.prev)?.label}
-            </Button>
-          )}
-          {col?.next && (
-            <Button
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onMove(job.id, col.next!); }}
-              className="flex-1 text-[10px] h-7"
-            >
-              {columns.find((c) => c.status === col.next)?.label}
-              <ChevronRight className="w-3 h-3 ml-1" />
-            </Button>
-          )}
-        </div>
+        {(canManageJob || canAdvanceOnly) && (
+          <div className="flex items-center gap-2 pt-2 border-t border-[rgba(60,60,67,0.15)]">
+            {col?.prev && canManageJob && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => { e.stopPropagation(); onMove(job.id, col.prev!); }}
+                className="flex-1 text-[10px] h-7"
+              >
+                <ChevronLeft className="w-3 h-3 mr-1" />
+                {columns.find((c) => c.status === col.prev)?.label}
+              </Button>
+            )}
+            {col?.next && (
+              <Button
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onMove(job.id, col.next!); }}
+                className="flex-1 text-[10px] h-7"
+              >
+                {columns.find((c) => c.status === col.next)?.label}
+                <ChevronRight className="w-3 h-3 ml-1" />
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -404,6 +416,9 @@ export default function JobsPage() {
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const { data: jobs, loading, refetch } = useJobs();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const role = user?.role;
+  const canCreateDelete = role === "admin" || role === "sales";
 
   // Admin job creation
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -510,9 +525,11 @@ export default function JobsPage() {
               Track and manage your production jobs
             </p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-1" /> New Job
-          </Button>
+          {canCreateDelete && (
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" /> New Job
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -553,7 +570,7 @@ export default function JobsPage() {
                   </div>
                   <div className="space-y-3">
                     {colJobs.map((job: any) => (
-                      <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} />
+                      <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} userRole={role} />
                     ))}
                     {colJobs.length === 0 && (
                       <div className="text-center py-6 text-caption text-[var(--text-tertiary)]">
@@ -580,7 +597,7 @@ export default function JobsPage() {
               <TabsContent value={activeTab}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   {filteredJobs.map((job: any) => (
-                    <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} />
+                    <JobCard key={job.id} job={job} onMove={handleMoveJob} onExpand={setExpandedJob} onDelete={handleDeleteJob} userRole={role} />
                   ))}
                 </div>
               </TabsContent>

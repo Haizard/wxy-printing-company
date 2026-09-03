@@ -10,9 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInventory } from "@/hooks/useApi";
 import { formatTZS } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function InventoryPage() {
   const { data: items, loading, refetch } = useInventory();
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin" || user?.role === "inventory_manager";
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -78,9 +81,11 @@ export default function InventoryPage() {
             <h1 className="text-title-1 font-bold">Inventory</h1>
             <p className="text-body text-[var(--text-secondary)] mt-1">Manage stock levels & movements</p>
           </div>
-          <Button size="sm" onClick={openCreateItem}>
-            <Plus className="w-4 h-4 mr-1" /> Add Item
-          </Button>
+          {canEdit && (
+            <Button size="sm" onClick={openCreateItem}>
+              <Plus className="w-4 h-4 mr-1" /> Add Item
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -119,10 +124,12 @@ export default function InventoryPage() {
                           <p className="text-caption text-[var(--text-tertiary)]">{item.unit} • {item.sku || "No SKU"}</p>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditItem(item)}><Pencil className="w-3 h-3" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-[var(--accent-danger)]" onClick={() => deleteItem(item.id)}><Trash2 className="w-3 h-3" /></Button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditItem(item)}><Pencil className="w-3 h-3" /></Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-[var(--accent-danger)]" onClick={() => deleteItem(item.id)}><Trash2 className="w-3 h-3" /></Button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-end justify-between mb-2">
                       <div>
@@ -138,14 +145,16 @@ export default function InventoryPage() {
                       <div className={`h-2 rounded-full transition-all ${isLow ? "bg-[var(--accent-warning)]" : "bg-[var(--accent-success)]"}`} style={{ width: `${pct}%` }} />
                     </div>
                     {item.supplier && <p className="text-caption text-[var(--text-tertiary)] mb-3">Supplier: {item.supplier}</p>}
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSelectedItem(item); setMovementType("in"); setDialogOpen(true); }}>
-                        <ArrowDown className="w-3 h-3 mr-1" /> Stock In
-                      </Button>
-                      <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSelectedItem(item); setMovementType("out"); setDialogOpen(true); }}>
-                        <ArrowUp className="w-3 h-3 mr-1" /> Stock Out
-                      </Button>
-                    </div>
+                    {canEdit && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSelectedItem(item); setMovementType("in"); setDialogOpen(true); }}>
+                          <ArrowDown className="w-3 h-3 mr-1" /> Stock In
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSelectedItem(item); setMovementType("out"); setDialogOpen(true); }}>
+                          <ArrowUp className="w-3 h-3 mr-1" /> Stock Out
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
