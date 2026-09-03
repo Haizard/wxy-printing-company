@@ -327,6 +327,9 @@ const ADDITIVE_COLUMNS: string[] = [
 
   // inventory_movements: approved_by column
   `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES users(id); EXCEPTION WHEN duplicate_column THEN null; END $$`,
+
+  // inventory_items: image_url column
+  `DO $$ BEGIN ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS image_url text; EXCEPTION WHEN duplicate_column THEN null; END $$`,
 ];
 
 // ── Indexes (CREATE INDEX IF NOT EXISTS) ────────────────────────────────────

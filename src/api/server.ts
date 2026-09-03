@@ -1080,10 +1080,10 @@ app.delete("/api/products/:id", authMiddleware, async (req, res) => {
 
 app.post("/api/inventory", authMiddleware, async (req, res) => {
   try {
-    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier, imageUrl } = req.body;
     if (!name || !unit) return res.status(400).json({ error: "Name and unit are required" });
     const [item] = await db.insert(inventoryItems).values({
-      name, sku: sku || null, unit, category: category || null, currentQty: String(currentQty || 0), reorderLevel: String(reorderLevel || 0), unitCost: unitCost || null, supplier: supplier || null,
+      name, sku: sku || null, unit, category: category || null, currentQty: String(currentQty || 0), reorderLevel: String(reorderLevel || 0), unitCost: unitCost || null, supplier: supplier || null, imageUrl: imageUrl || null,
     }).returning();
     res.status(201).json(item);
   } catch (error: any) {
@@ -1095,9 +1095,9 @@ app.post("/api/inventory", authMiddleware, async (req, res) => {
 app.put("/api/inventory/:id", authMiddleware, async (req, res) => {
   try {
     const id = req.params.id as string;
-    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier, imageUrl } = req.body;
     const [updated] = await db.update(inventoryItems).set({
-      name, sku, unit, category, currentQty: String(currentQty), reorderLevel: String(reorderLevel), unitCost, supplier,
+      name, sku, unit, category, currentQty: String(currentQty), reorderLevel: String(reorderLevel), unitCost, supplier, imageUrl: imageUrl || null,
     }).where(eq(inventoryItems.id, id)).returning();
     if (!updated) return res.status(404).json({ error: "Inventory item not found" });
     res.json(updated);

@@ -411,6 +411,7 @@ export const inventoryItems = pgTable(
     reorderLevel: numeric("reorder_level").notNull().default("0"),
     unitCost: integer("unit_cost"),
     supplier: text("supplier"),
+    imageUrl: text("image_url"),
     linkedProductOptionValueId: uuid("linked_product_option_value_id"),
   },
   (table) => ({

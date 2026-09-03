@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Package, Plus, Pencil, Trash2, ArrowDown, ArrowUp, Minus, AlertTriangle, BarChart3, TrendingDown, Recycle, Eye, Filter } from "lucide-react";
+import { Package, Plus, Pencil, Trash2, ArrowDown, ArrowUp, Minus, AlertTriangle, BarChart3, TrendingDown, Recycle, Eye, Filter, LayoutGrid, List, Image } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +42,8 @@ export default function InventoryPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [itemForm, setItemForm] = useState({ name: "", sku: "", unit: "sheet", category: "general", currentQty: 0, reorderLevel: 0, unitCost: 0, supplier: "" });
+  const [itemForm, setItemForm] = useState({ name: "", sku: "", unit: "sheet", category: "general", currentQty: 0, reorderLevel: 0, unitCost: 0, supplier: "", imageUrl: "" });
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [movementType, setMovementType] = useState<"in" | "out" | "waste" | "return" | "adjustment">("in");
   const [movementQty, setMovementQty] = useState(0);
   const [movementReason, setMovementReason] = useState("");
@@ -133,13 +134,13 @@ export default function InventoryPage() {
 
   const openCreateItem = () => {
     setEditingItem(null);
-    setItemForm({ name: "", sku: "", unit: "sheet", category: "general", currentQty: 0, reorderLevel: 0, unitCost: 0, supplier: "" });
+    setItemForm({ name: "", sku: "", unit: "sheet", category: "general", currentQty: 0, reorderLevel: 0, unitCost: 0, supplier: "", imageUrl: "" });
     setItemDialogOpen(true);
   };
 
   const openEditItem = (item: any) => {
     setEditingItem(item);
-    setItemForm({ name: item.name, sku: item.sku || "", unit: item.unit, category: item.category || "general", currentQty: Number(item.currentQty), reorderLevel: Number(item.reorderLevel), unitCost: item.unitCost || 0, supplier: item.supplier || "" });
+    setItemForm({ name: item.name, sku: item.sku || "", unit: item.unit, category: item.category || "general", currentQty: Number(item.currentQty), reorderLevel: Number(item.reorderLevel), unitCost: item.unitCost || 0, supplier: item.supplier || "", imageUrl: item.imageUrl || "" });
     setItemDialogOpen(true);
   };
 
@@ -256,7 +257,20 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* Items Grid */}
+      {/* Items Header + View Toggle */}
+      <div className="flex items-center justify-between">
+        <p className="text-caption text-[var(--text-tertiary)]">{filteredItems.length} material{filteredItems.length !== 1 ? "s" : ""}</p>
+        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+          <Button size="icon" variant={viewMode === "grid" ? "default" : "ghost"} className="h-8 w-8" onClick={() => setViewMode("grid")}>
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+          <Button size="icon" variant={viewMode === "list" ? "default" : "ghost"} className="h-8 w-8" onClick={() => setViewMode("list")}>
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Items Display */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => <div key={i} className="h-40 rounded-[var(--radius-lg)] bg-[var(--glass-fill-subtle)] animate-pulse" />)}
@@ -270,7 +284,7 @@ export default function InventoryPage() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredItems.map((item: any) => {
             const current = Number(item.currentQty);
@@ -284,9 +298,13 @@ export default function InventoryPage() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center ${isLow ? "bg-[rgba(255,159,10,0.12)]" : "bg-[var(--glass-fill-subtle)]"}`}>
-                          <Package className={`w-5 h-5 ${isLow ? "text-[var(--accent-warning)]" : "text-[var(--text-secondary)]"}`} />
-                        </div>
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-[var(--radius-md)] object-cover" />
+                        ) : (
+                          <div className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center ${isLow ? "bg-[rgba(255,159,10,0.12)]" : "bg-[var(--glass-fill-subtle)]"}`}>
+                            <Package className={`w-5 h-5 ${isLow ? "text-[var(--accent-warning)]" : "text-[var(--text-secondary)]"}`} />
+                          </div>
+                        )}
                         <div>
                           <p className="text-subhead font-semibold">{item.name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -337,6 +355,70 @@ export default function InventoryPage() {
             );
           })}
         </div>
+      ) : (
+        /* List View */
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--glass-border)]">
+                  <th className="text-left text-caption font-semibold text-[var(--text-tertiary)] p-3">Material</th>
+                  <th className="text-left text-caption font-semibold text-[var(--text-tertiary)] p-3">Category</th>
+                  <th className="text-left text-caption font-semibold text-[var(--text-tertiary)] p-3">Unit</th>
+                  <th className="text-right text-caption font-semibold text-[var(--text-tertiary)] p-3">Stock</th>
+                  <th className="text-right text-caption font-semibold text-[var(--text-tertiary)] p-3">Reorder</th>
+                  <th className="text-right text-caption font-semibold text-[var(--text-tertiary)] p-3">Value</th>
+                  {canEdit && <th className="text-right text-caption font-semibold text-[var(--text-tertiary)] p-3">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item: any) => {
+                  const current = Number(item.currentQty);
+                  const reorder = Number(item.reorderLevel);
+                  const isLow = current <= reorder;
+                  const cat = item.category || "general";
+                  return (
+                    <tr key={item.id} className={`border-b border-[var(--glass-border)] last:border-0 hover:bg-[var(--glass-fill-subtle)] transition-colors ${isLow ? "bg-[rgba(255,159,10,0.04)]" : ""}`}>
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                          ) : (
+                            <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${isLow ? "bg-[rgba(255,159,10,0.12)]" : "bg-[var(--glass-fill-subtle)]"}`}>
+                              <Package className={`w-4 h-4 ${isLow ? "text-[var(--accent-warning)]" : "text-[var(--text-secondary)]"}`} />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-subhead font-medium">{item.name}</p>
+                            {item.sku && <p className="text-caption text-[var(--text-tertiary)]">{item.sku}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3"><Badge className={`${materialCategories.find((c: any) => c.value === cat)?.color || "bg-[var(--glass-fill-subtle)] text-[var(--text-secondary)]"} border-0 text-[10px]`}>{materialCategories.find((c: any) => c.value === cat)?.name || cat}</Badge></td>
+                      <td className="p-3 text-caption text-[var(--text-secondary)]">{item.unit}</td>
+                      <td className="p-3 text-right">
+                        <span className={`text-subhead font-semibold ${isLow ? "text-[var(--accent-warning)]" : ""}`}>{current.toLocaleString()}</span>
+                      </td>
+                      <td className="p-3 text-right text-caption text-[var(--text-tertiary)]">{reorder.toLocaleString()}</td>
+                      <td className="p-3 text-right text-caption text-[var(--text-secondary)]">{item.unitCost > 0 ? formatTZS(item.unitCost * current) : "—"}</td>
+                      {canEdit && (
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedItem(item); setMovementType("in"); setDialogOpen(true); }}><ArrowDown className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedItem(item); setMovementType("out"); setDialogOpen(true); }}><ArrowUp className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedItem(item); fetchHistory(item.id); setHistoryOpen(true); }}><Eye className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditItem(item)}><Pencil className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-[var(--accent-danger)]" onClick={() => deleteItem(item.id)}><Trash2 className="w-3 h-3" /></Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* Movement History Dialog */}
@@ -409,6 +491,15 @@ export default function InventoryPage() {
               <div className="space-y-2"><Label>Reorder Level</Label><Input type="number" value={itemForm.reorderLevel} onChange={(e) => setItemForm({ ...itemForm, reorderLevel: parseInt(e.target.value) || 0 })} /></div>
             </div>
             <div className="space-y-2"><Label>Supplier</Label><Input value={itemForm.supplier} onChange={(e) => setItemForm({ ...itemForm, supplier: e.target.value })} placeholder="Optional" /></div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><Image className="w-3 h-3" /> Image URL</Label>
+              <Input value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://example.com/image.jpg" />
+              {itemForm.imageUrl && (
+                <div className="mt-2">
+                  <img src={itemForm.imageUrl} alt="Preview" className="w-20 h-20 rounded-[var(--radius-md)] object-cover border border-[var(--glass-border)]" onError={(e) => (e.target as HTMLImageElement).style.display = "none"} />
+                </div>
+              )}
+            </div>
             <div className="flex gap-3 pt-2">
               <Button className="flex-1" onClick={saveItem}>{editingItem ? "Save Changes" : "Add Material"}</Button>
               <Button variant="outline" onClick={() => setItemDialogOpen(false)}>Cancel</Button>
