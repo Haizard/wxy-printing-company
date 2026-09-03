@@ -23,6 +23,10 @@ import {
   chatThreads,
   chatMessages,
   contactMessages,
+  suppliers,
+  purchaseOrders,
+  purchaseOrderItems,
+  materialIssuances,
 } from "../db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import authRoutes, { authMiddleware } from "./auth";
@@ -551,7 +555,7 @@ app.post("/api/inventory/:id/movements", authMiddleware, async (req, res) => {
   try {
     const itemId = req.params.id as string;
     const user = (req as any).user;
-    const { movementType, quantity, reason, jobId } = req.body;
+    const { movementType, quantity, reason, wasteReason, jobId } = req.body;
 
     const [item] = await db
       .select()
@@ -559,16 +563,19 @@ app.post("/api/inventory/:id/movements", authMiddleware, async (req, res) => {
       .where(eq(inventoryItems.id, itemId));
     if (!item) return res.status(404).json({ error: "Item not found" });
 
-    // Calculate new quantity
+    // Calculate new quantity based on movement type
     let newQty = Number(item.currentQty);
-    if (movementType === "in") {
+    const validIncreaseTypes = ["in", "return", "return_to_stock"];
+    const validDecreaseTypes = ["out", "waste", "issue"];
+
+    if (validIncreaseTypes.includes(movementType)) {
       newQty += Number(quantity);
-    } else if (movementType === "out") {
+    } else if (validDecreaseTypes.includes(movementType)) {
       if (Number(quantity) > newQty) {
         return res.status(400).json({ error: "Insufficient stock" });
       }
       newQty -= Number(quantity);
-    } else {
+    } else if (movementType === "adjustment") {
       newQty = Number(quantity);
     }
 
@@ -576,6 +583,14 @@ app.post("/api/inventory/:id/movements", authMiddleware, async (req, res) => {
     await db.update(inventoryItems)
       .set({ currentQty: newQty.toString() })
       .where(eq(inventoryItems.id, itemId));
+
+    // Build movement description for waste reasons
+    const wasteReasons = [
+      "printing_error", "cutting_error", "machine_setup", "damaged_material",
+      "wrong_measurement", "color_problem", "customer_change", "operator_error", "other"
+    ];
+    const effectiveReason = movementType === "waste" && wasteReason ?
+      `Waste: ${wasteReasons.includes(wasteReason) ? wasteReason.replace(/_/g, " ") : wasteReason}` : reason;
 
     // Log movement
     const [movement] = await db
@@ -585,7 +600,7 @@ app.post("/api/inventory/:id/movements", authMiddleware, async (req, res) => {
         jobId: jobId || null,
         movementType,
         quantity: quantity.toString(),
-        reason,
+        reason: effectiveReason || null,
         createdBy: user.userId,
       })
       .returning();
@@ -1064,10 +1079,10 @@ app.delete("/api/products/:id", authMiddleware, async (req, res) => {
 
 app.post("/api/inventory", authMiddleware, async (req, res) => {
   try {
-    const { name, sku, unit, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier } = req.body;
     if (!name || !unit) return res.status(400).json({ error: "Name and unit are required" });
     const [item] = await db.insert(inventoryItems).values({
-      name, sku: sku || null, unit, currentQty: String(currentQty || 0), reorderLevel: String(reorderLevel || 0), unitCost: unitCost || null, supplier: supplier || null,
+      name, sku: sku || null, unit, category: category || null, currentQty: String(currentQty || 0), reorderLevel: String(reorderLevel || 0), unitCost: unitCost || null, supplier: supplier || null,
     }).returning();
     res.status(201).json(item);
   } catch (error: any) {
@@ -1079,9 +1094,9 @@ app.post("/api/inventory", authMiddleware, async (req, res) => {
 app.put("/api/inventory/:id", authMiddleware, async (req, res) => {
   try {
     const id = req.params.id as string;
-    const { name, sku, unit, currentQty, reorderLevel, unitCost, supplier } = req.body;
+    const { name, sku, unit, category, currentQty, reorderLevel, unitCost, supplier } = req.body;
     const [updated] = await db.update(inventoryItems).set({
-      name, sku, unit, currentQty: String(currentQty), reorderLevel: String(reorderLevel), unitCost, supplier,
+      name, sku, unit, category, currentQty: String(currentQty), reorderLevel: String(reorderLevel), unitCost, supplier,
     }).where(eq(inventoryItems.id, id)).returning();
     if (!updated) return res.status(404).json({ error: "Inventory item not found" });
     res.json(updated);
@@ -1714,6 +1729,342 @@ app.get("/api/admin/migrate", async (req, res) => {
   } catch (error: any) {
     console.error("Migration error:", error);
     res.status(500).json({ error: error.message || "Migration failed" });
+  }
+});
+
+// ── Inventory Dashboard Stats ─────────────────────────────────────────────
+
+app.get("/api/inventory/dashboard", authMiddleware, async (_req, res) => {
+  try {
+    const allItems = await db.select().from(inventoryItems);
+    const totalItems = allItems.length;
+    const totalStockValue = allItems.reduce((sum: number, item: any) => sum + (item.unitCost || 0) * Number(item.currentQty), 0);
+    const lowStockItems = allItems.filter((item: any) => Number(item.currentQty) <= Number(item.reorderLevel));
+    const outOfStockItems = allItems.filter((item: any) => Number(item.currentQty) === 0);
+
+    const categoryBreakdown: Record<string, { count: number; value: number }> = {};
+    for (const item of allItems) {
+      const cat = (item as any).category || "general";
+      if (!categoryBreakdown[cat]) categoryBreakdown[cat] = { count: 0, value: 0 };
+      categoryBreakdown[cat].count++;
+      categoryBreakdown[cat].value += ((item as any).unitCost || 0) * Number((item as any).currentQty);
+    }
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentMovements = await db.select().from(inventoryMovements).where(sql`${inventoryMovements.createdAt} >= ${thirtyDaysAgo}`);
+
+    const monthlyPurchases = recentMovements.filter((m: any) => m.movementType === "in").reduce((sum: number, m: any) => {
+      const item = allItems.find((i: any) => i.id === m.itemId);
+      return sum + ((item as any)?.unitCost || 0) * Number(m.quantity);
+    }, 0);
+
+    const monthlyUsage = recentMovements.filter((m: any) => m.movementType === "out" || m.movementType === "issue").reduce((sum: number, m: any) => {
+      const item = allItems.find((i: any) => i.id === m.itemId);
+      return sum + ((item as any)?.unitCost || 0) * Number(m.quantity);
+    }, 0);
+
+    const monthlyWaste = recentMovements.filter((m: any) => m.movementType === "waste").reduce((sum: number, m: any) => {
+      const item = allItems.find((i: any) => i.id === m.itemId);
+      return sum + ((item as any)?.unitCost || 0) * Number(m.quantity);
+    }, 0);
+
+    res.json({
+      totalItems, totalStockValue,
+      lowStockCount: lowStockItems.length,
+      outOfStockCount: outOfStockItems.length,
+      categoryBreakdown, monthlyPurchases, monthlyUsage, monthlyWaste,
+      wastePercentage: monthlyUsage > 0 ? Math.round((monthlyWaste / (monthlyUsage + monthlyWaste)) * 100) : 0,
+    });
+  } catch (error) {
+    console.error("Inventory dashboard error:", error);
+    res.status(500).json({ error: "Failed to fetch inventory dashboard" });
+  }
+});
+
+// ── Suppliers CRUD ──────────────────────────────────────────────────────────
+
+app.get("/api/suppliers", authMiddleware, async (_req, res) => {
+  try {
+    const allSuppliers = await db.select().from(suppliers).orderBy(sql`${suppliers.createdAt} DESC`);
+    res.json(allSuppliers);
+  } catch (error) {
+    console.error("Fetch suppliers error:", error);
+    res.status(500).json({ error: "Failed to fetch suppliers" });
+  }
+});
+
+app.post("/api/suppliers", authMiddleware, async (req, res) => {
+  try {
+    const { name, contactPerson, email, phone, address, notes } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+    const [supplier] = await db.insert(suppliers).values({
+      name, contactPerson: contactPerson || null, email: email || null,
+      phone: phone || null, address: address || null, notes: notes || null,
+    }).returning();
+    res.status(201).json(supplier);
+  } catch (error: any) {
+    console.error("Create supplier error:", error);
+    res.status(500).json({ error: error.message || "Failed to create supplier" });
+  }
+});
+
+app.put("/api/suppliers/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, contactPerson, email, phone, address, notes, isActive } = req.body;
+    const [updated] = await db.update(suppliers).set({
+      name, contactPerson, email, phone, address, notes, isActive,
+    }).where(eq(suppliers.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Supplier not found" });
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update supplier error:", error);
+    res.status(500).json({ error: error.message || "Failed to update supplier" });
+  }
+});
+
+app.delete("/api/suppliers/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(suppliers).where(eq(suppliers.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete supplier error:", error);
+    res.status(500).json({ error: "Failed to delete supplier" });
+  }
+});
+
+// ── Purchase Orders CRUD ────────────────────────────────────────────────────
+
+app.get("/api/purchase-orders", authMiddleware, async (_req, res) => {
+  try {
+    const allOrders = await db.select({
+      id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber,
+      supplierId: purchaseOrders.supplierId, status: purchaseOrders.status,
+      totalAmount: purchaseOrders.totalAmount, notes: purchaseOrders.notes,
+      expectedDate: purchaseOrders.expectedDate, receivedDate: purchaseOrders.receivedDate,
+      createdBy: purchaseOrders.createdBy, createdAt: purchaseOrders.createdAt,
+      supplierName: suppliers.name,
+    }).from(purchaseOrders).leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .orderBy(sql`${purchaseOrders.createdAt} DESC`);
+    res.json(allOrders);
+  } catch (error) {
+    console.error("Fetch purchase orders error:", error);
+    res.status(500).json({ error: "Failed to fetch purchase orders" });
+  }
+});
+
+app.get("/api/purchase-orders/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const [order] = await db.select({
+      id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber,
+      supplierId: purchaseOrders.supplierId, status: purchaseOrders.status,
+      totalAmount: purchaseOrders.totalAmount, notes: purchaseOrders.notes,
+      expectedDate: purchaseOrders.expectedDate, receivedDate: purchaseOrders.receivedDate,
+      createdBy: purchaseOrders.createdBy, createdAt: purchaseOrders.createdAt,
+      supplierName: suppliers.name,
+    }).from(purchaseOrders).leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(eq(purchaseOrders.id, id));
+    if (!order) return res.status(404).json({ error: "Purchase order not found" });
+    const items = await db.select({
+      id: purchaseOrderItems.id, inventoryItemId: purchaseOrderItems.inventoryItemId,
+      quantity: purchaseOrderItems.quantity, unitCost: purchaseOrderItems.unitCost,
+      totalCost: purchaseOrderItems.totalCost, itemName: inventoryItems.name, itemUnit: inventoryItems.unit,
+    }).from(purchaseOrderItems).leftJoin(inventoryItems, eq(purchaseOrderItems.inventoryItemId, inventoryItems.id))
+      .where(eq(purchaseOrderItems.purchaseOrderId, id));
+    res.json({ ...order, items });
+  } catch (error) {
+    console.error("Fetch purchase order error:", error);
+    res.status(500).json({ error: "Failed to fetch purchase order" });
+  }
+});
+
+app.post("/api/purchase-orders", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { supplierId, notes, expectedDate, items } = req.body;
+    if (!supplierId) return res.status(400).json({ error: "Supplier is required" });
+    const year = new Date().getFullYear();
+    const orderNumber = `PO-${year}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+    const totalAmount = items?.reduce((sum: number, item: any) => sum + (Number(item.unitCost) * Number(item.quantity)), 0) || 0;
+    const [order] = await db.insert(purchaseOrders).values({
+      orderNumber, supplierId, notes: notes || null,
+      expectedDate: expectedDate || null, totalAmount, createdBy: user.userId,
+    }).returning();
+    if (items && items.length > 0) {
+      await db.insert(purchaseOrderItems).values(items.map((item: any) => ({
+        purchaseOrderId: order.id, inventoryItemId: item.inventoryItemId,
+        quantity: String(item.quantity), unitCost: Number(item.unitCost),
+        totalCost: Number(item.unitCost) * Number(item.quantity),
+      })));
+    }
+    res.status(201).json(order);
+  } catch (error: any) {
+    console.error("Create purchase order error:", error);
+    res.status(500).json({ error: error.message || "Failed to create purchase order" });
+  }
+});
+
+app.patch("/api/purchase-orders/:id/status", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { status } = req.body;
+    const updates: Record<string, any> = { status };
+    if (status === "received") updates.receivedDate = new Date().toISOString().split("T")[0];
+    const [updated] = await db.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Purchase order not found" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Update purchase order status error:", error);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+app.delete("/api/purchase-orders/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, id));
+    await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete purchase order error:", error);
+    res.status(500).json({ error: "Failed to delete purchase order" });
+  }
+});
+
+// ── Material Issuances (job-linked) ────────────────────────────────────────
+
+app.get("/api/material-issuances", authMiddleware, async (req, res) => {
+  try {
+    const jobId = req.query.jobId as string;
+    let query = db.select({
+      id: materialIssuances.id, jobId: materialIssuances.jobId,
+      inventoryItemId: materialIssuances.inventoryItemId,
+      quantityIssued: materialIssuances.quantityIssued,
+      quantityUsed: materialIssuances.quantityUsed,
+      quantityReturned: materialIssuances.quantityReturned,
+      quantityWaste: materialIssuances.quantityWaste,
+      wasteReason: materialIssuances.wasteReason,
+      status: materialIssuances.status, issuedBy: materialIssuances.issuedBy,
+      issuedAt: materialIssuances.issuedAt, returnedAt: materialIssuances.returnedAt,
+      notes: materialIssuances.notes,
+      itemName: inventoryItems.name, itemUnit: inventoryItems.unit,
+      jobTitle: jobs.title, jobNumber: jobs.jobNumber,
+      issuedByName: users.fullName,
+    }).from(materialIssuances)
+      .leftJoin(inventoryItems, eq(materialIssuances.inventoryItemId, inventoryItems.id))
+      .leftJoin(jobs, eq(materialIssuances.jobId, jobs.id))
+      .leftJoin(users, eq(materialIssuances.issuedBy, users.id));
+    if (jobId) query = query.where(eq(materialIssuances.jobId, jobId)) as any;
+    const result = await query.orderBy(sql`${materialIssuances.issuedAt} DESC`);
+    res.json(result);
+  } catch (error) {
+    console.error("Fetch material issuances error:", error);
+    res.status(500).json({ error: "Failed to fetch material issuances" });
+  }
+});
+
+app.post("/api/material-issuances", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { jobId, inventoryItemId, quantityIssued, notes } = req.body;
+    if (!jobId || !inventoryItemId || !quantityIssued) return res.status(400).json({ error: "Job, item, and quantity are required" });
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, inventoryItemId));
+    if (!item) return res.status(404).json({ error: "Inventory item not found" });
+    if (Number(quantityIssued) > Number((item as any).currentQty)) return res.status(400).json({ error: "Insufficient stock" });
+    const newQty = Number((item as any).currentQty) - Number(quantityIssued);
+    await db.update(inventoryItems).set({ currentQty: newQty.toString() }).where(eq(inventoryItems.id, inventoryItemId));
+    await db.insert(inventoryMovements).values({
+      itemId: inventoryItemId, jobId, movementType: "issue",
+      quantity: quantityIssued.toString(), reason: notes || "Material issued to job",
+      createdBy: user.userId,
+    });
+    const [issuance] = await db.insert(materialIssuances).values({
+      jobId, inventoryItemId, quantityIssued: quantityIssued.toString(),
+      issuedBy: user.userId, notes: notes || null,
+    }).returning();
+    res.status(201).json(issuance);
+  } catch (error) {
+    console.error("Create material issuance error:", error);
+    res.status(500).json({ error: "Failed to create material issuance" });
+  }
+});
+
+app.patch("/api/material-issuances/:id/return", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const id = req.params.id as string;
+    const { quantityReturned, quantityUsed, quantityWaste, wasteReason } = req.body;
+    const [issuance] = await db.select().from(materialIssuances).where(eq(materialIssuances.id, id));
+    if (!issuance) return res.status(404).json({ error: "Issuance not found" });
+    const returned = Number(quantityReturned || 0);
+    const used = Number(quantityUsed || 0);
+    const waste = Number(quantityWaste || 0);
+    const newStatus = returned > 0 && used > 0 ? "partial_return" : returned >= Number(issuance.quantityIssued) ? "returned" : "consumed";
+    await db.update(materialIssuances).set({
+      quantityReturned: String(returned), quantityUsed: String(used),
+      quantityWaste: String(waste), wasteReason: wasteReason || null,
+      status: newStatus, returnedAt: new Date(),
+    }).where(eq(materialIssuances.id, id));
+    if (returned > 0) {
+      const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, issuance.inventoryItemId));
+      if (item) {
+        await db.update(inventoryItems).set({ currentQty: (Number((item as any).currentQty) + returned).toString() }).where(eq(inventoryItems.id, issuance.inventoryItemId));
+        await db.insert(inventoryMovements).values({
+          itemId: issuance.inventoryItemId, jobId: issuance.jobId,
+          movementType: "return_to_stock", quantity: String(returned),
+          reason: "Material returned from job", createdBy: user.userId,
+        });
+      }
+    }
+    if (waste > 0) {
+      await db.insert(inventoryMovements).values({
+        itemId: issuance.inventoryItemId, jobId: issuance.jobId,
+        movementType: "waste", quantity: String(waste),
+        reason: wasteReason || "Production waste", wasteReason: wasteReason || null,
+        createdBy: user.userId,
+      });
+    }
+    res.json({ success: true, status: newStatus });
+  } catch (error) {
+    console.error("Return material error:", error);
+    res.status(500).json({ error: "Failed to process return" });
+  }
+});
+
+// ── Job Material Cost Summary ───────────────────────────────────────────────
+
+app.get("/api/jobs/:id/material-cost", authMiddleware, async (req, res) => {
+  try {
+    const jobId = req.params.id as string;
+    const issuances = await db.select({
+      id: materialIssuances.id, inventoryItemId: materialIssuances.inventoryItemId,
+      quantityIssued: materialIssuances.quantityIssued,
+      quantityUsed: materialIssuances.quantityUsed,
+      quantityReturned: materialIssuances.quantityReturned,
+      quantityWaste: materialIssuances.quantityWaste,
+      itemName: inventoryItems.name, itemUnit: inventoryItems.unit,
+      unitCost: inventoryItems.unitCost,
+    }).from(materialIssuances)
+      .leftJoin(inventoryItems, eq(materialIssuances.inventoryItemId, inventoryItems.id))
+      .where(eq(materialIssuances.jobId, jobId));
+    let totalMaterialCost = 0;
+    let totalWasteCost = 0;
+    const breakdown = issuances.map((iss: any) => {
+      const unitCost = iss.unitCost || 0;
+      const waste = Number(iss.quantityWaste || 0);
+      const issued = Number(iss.quantityIssued);
+      const cost = unitCost * issued;
+      const wasteCost = unitCost * waste;
+      totalMaterialCost += cost;
+      totalWasteCost += wasteCost;
+      return { ...iss, cost, wasteCost };
+    });
+    res.json({ jobId, totalMaterialCost, totalWasteCost, netCost: totalMaterialCost - totalWasteCost, items: breakdown });
+  } catch (error) {
+    console.error("Fetch job material cost error:", error);
+    res.status(500).json({ error: "Failed to fetch material cost" });
   }
 });
 

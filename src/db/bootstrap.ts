@@ -17,7 +17,9 @@ const ENUM_DDL: Array<[type: string, values: string[]]> = [
   ["job_status", ["quote", "confirmed", "in_production", "qa", "ready", "delivered", "closed"]],
   ["job_priority", ["low", "normal", "high", "urgent"]],
   ["order_status", ["pending", "paid", "partially_paid", "cancelled"]],
-  ["movement_type", ["in", "out", "adjustment"]],
+  ["movement_type", ["in", "out", "waste", "return", "adjustment", "issue", "return_to_stock"]],
+  ["purchase_order_status", ["draft", "ordered", "received", "cancelled"]],
+  ["material_issuance_status", ["issued", "partial_return", "returned", "consumed"]],
 ];
 
 const TABLE_DDL: string[] = [
@@ -81,7 +83,7 @@ const TABLE_DDL: string[] = [
     id uuid primary key default gen_random_uuid(),
     product_id uuid not null references products(id),
     pricing_model text not null,
-    option_filter jsonb default '{}'::jsonb,
+    option_filter jsonb default '{}',
     markup_percent numeric,
     min_charge integer,
     currency text default 'TZS',
@@ -115,13 +117,12 @@ const TABLE_DDL: string[] = [
 
   `CREATE TABLE IF NOT EXISTS product_finishing_options (
     product_id uuid not null references products(id),
-    finishing_option_id uuid not null references finishing_options(id),
-    primary key (product_id, finishing_option_id)
+    finishing_option_id uuid not null references finishing_options(id)
   )`,
 
   `CREATE TABLE IF NOT EXISTS quotes (
     id uuid primary key default gen_random_uuid(),
-    quote_number text not null,
+    quote_number text unique not null,
     customer_id uuid not null references users(id),
     created_by uuid references users(id),
     status quote_status default 'draft',
@@ -150,20 +151,20 @@ const TABLE_DDL: string[] = [
 
   `CREATE TABLE IF NOT EXISTS orders (
     id uuid primary key default gen_random_uuid(),
-    order_number text not null,
+    order_number text unique not null,
     quote_id uuid references quotes(id),
     customer_id uuid not null references users(id),
     status order_status default 'pending',
     total integer not null,
     payment_method text,
-    items jsonb default '[]'::jsonb,
+    items jsonb default '[]',
     notes text,
     created_at timestamp default now()
   )`,
 
   `CREATE TABLE IF NOT EXISTS jobs (
     id uuid primary key default gen_random_uuid(),
-    job_number text not null,
+    job_number text unique not null,
     order_id uuid references orders(id),
     title text not null,
     status job_status default 'confirmed',
@@ -196,8 +197,9 @@ const TABLE_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS inventory_items (
     id uuid primary key default gen_random_uuid(),
     name text not null,
-    sku text,
+    sku text unique,
     unit text not null,
+    category text default 'general',
     current_qty numeric not null default '0',
     reorder_level numeric not null default '0',
     unit_cost integer,
@@ -212,8 +214,60 @@ const TABLE_DDL: string[] = [
     movement_type movement_type not null,
     quantity numeric not null,
     reason text,
+    waste_reason text,
+    approved_by uuid references users(id),
     created_by uuid not null references users(id),
     created_at timestamp default now()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS suppliers (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    contact_person text,
+    email text,
+    phone text,
+    address text,
+    notes text,
+    is_active boolean default true,
+    created_at timestamp default now()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS purchase_orders (
+    id uuid primary key default gen_random_uuid(),
+    order_number text unique not null,
+    supplier_id uuid not null references suppliers(id),
+    status purchase_order_status default 'draft',
+    total_amount integer default 0,
+    notes text,
+    expected_date date,
+    received_date date,
+    created_by uuid not null references users(id),
+    created_at timestamp default now()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS purchase_order_items (
+    id uuid primary key default gen_random_uuid(),
+    purchase_order_id uuid not null references purchase_orders(id),
+    inventory_item_id uuid not null references inventory_items(id),
+    quantity numeric not null,
+    unit_cost integer not null,
+    total_cost integer not null
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS material_issuances (
+    id uuid primary key default gen_random_uuid(),
+    job_id uuid not null references jobs(id),
+    inventory_item_id uuid not null references inventory_items(id),
+    quantity_issued numeric not null,
+    quantity_used numeric default '0',
+    quantity_returned numeric default '0',
+    quantity_waste numeric default '0',
+    waste_reason text,
+    status material_issuance_status default 'issued',
+    issued_by uuid not null references users(id),
+    issued_at timestamp default now(),
+    returned_at timestamp,
+    notes text
   )`,
 
   `CREATE TABLE IF NOT EXISTS chat_threads (
@@ -232,7 +286,7 @@ const TABLE_DDL: string[] = [
     body text,
     attachment_url text,
     created_at timestamp default now(),
-    read_by uuid[] default '{}'::uuid[]
+    read_by text[] default '{}'
   )`,
 
   `CREATE TABLE IF NOT EXISTS contact_messages (
@@ -247,80 +301,124 @@ const TABLE_DDL: string[] = [
   )`,
 ];
 
-const INDEX_DDL: string[] = [
-  "CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS users_phone_idx ON users(phone)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS categories_slug_idx ON categories(slug)",
-  "CREATE INDEX IF NOT EXISTS categories_parent_idx ON categories(parent_id)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS products_slug_idx ON products(slug)",
-  "CREATE INDEX IF NOT EXISTS products_category_idx ON products(category_id)",
-  "CREATE INDEX IF NOT EXISTS products_pricing_model_idx ON products(pricing_model)",
-  "CREATE INDEX IF NOT EXISTS product_options_product_idx ON product_options(product_id)",
-  "CREATE INDEX IF NOT EXISTS product_option_values_option_idx ON product_option_values(product_option_id)",
-  "CREATE INDEX IF NOT EXISTS price_rules_product_idx ON price_rules(product_id)",
-  "CREATE INDEX IF NOT EXISTS price_rules_active_idx ON price_rules(active_from, active_to)",
-  "CREATE INDEX IF NOT EXISTS price_bands_rule_idx ON price_bands(price_rule_id)",
-  "CREATE INDEX IF NOT EXISTS product_finishing_options_product_idx ON product_finishing_options(product_id)",
-  "CREATE INDEX IF NOT EXISTS quotes_customer_idx ON quotes(customer_id)",
-  "CREATE INDEX IF NOT EXISTS quotes_status_idx ON quotes(status)",
-  "CREATE INDEX IF NOT EXISTS quote_lines_quote_idx ON quote_lines(quote_id)",
-  "CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id)",
-  "CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status)",
-  "CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status)",
-  "CREATE INDEX IF NOT EXISTS jobs_assignee_idx ON jobs(assigned_to)",
-  "CREATE INDEX IF NOT EXISTS job_status_history_job_idx ON job_status_history(job_id)",
-  "CREATE INDEX IF NOT EXISTS job_files_job_idx ON job_files(job_id)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_sku_idx ON inventory_items(sku)",
-  "CREATE INDEX IF NOT EXISTS inventory_movements_item_idx ON inventory_movements(item_id)",
-  "CREATE INDEX IF NOT EXISTS chat_threads_job_idx ON chat_threads(job_id)",
-  "CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON chat_messages(thread_id)",
+// ── Additive columns (safe ALTER TABLE … ADD COLUMN IF NOT EXISTS) ──────────
+//
+// When a new column is added to schema.ts, add the corresponding ALTER here.
+// The IF NOT EXISTS guard means it is a no-op when the column already exists.
+
+const ADDITIVE_COLUMNS: string[] = [
+  // inventory_items: category column
+  `DO $$ BEGIN ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category text DEFAULT 'general'; EXCEPTION WHEN duplicate_column THEN null; END $$`,
+
+  // inventory_movements: waste_reason column
+  `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS waste_reason text; EXCEPTION WHEN duplicate_column THEN null; END $$`,
+
+  // inventory_movements: approved_by column
+  `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES users(id); EXCEPTION WHEN duplicate_column THEN null; END $$`,
 ];
 
-// Columns added after the original push that older databases may lack.
-const ALTER_DDL: string[] = [
-  "ALTER TABLE orders ADD COLUMN IF NOT EXISTS items jsonb DEFAULT '[]'::jsonb",
-  "ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes text",
-  "ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS customer_id uuid REFERENCES users(id)",
+// ── Indexes (CREATE INDEX IF NOT EXISTS) ────────────────────────────────────
+
+const INDEXES: string[] = [
+  `CREATE INDEX IF NOT EXISTS inventory_items_category_idx ON inventory_items(category)`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_job_idx ON inventory_movements(job_id)`,
+  `CREATE INDEX IF NOT EXISTS inventory_movements_type_idx ON inventory_movements(movement_type)`,
+  `CREATE INDEX IF NOT EXISTS suppliers_name_idx ON suppliers(name)`,
+  `CREATE INDEX IF NOT EXISTS purchase_orders_supplier_idx ON purchase_orders(supplier_id)`,
+  `CREATE INDEX IF NOT EXISTS purchase_orders_status_idx ON purchase_orders(status)`,
+  `CREATE INDEX IF NOT EXISTS purchase_order_items_order_idx ON purchase_order_items(purchase_order_id)`,
+  `CREATE INDEX IF NOT EXISTS material_issuances_job_idx ON material_issuances(job_id)`,
+  `CREATE INDEX IF NOT EXISTS material_issuances_item_idx ON material_issuances(inventory_item_id)`,
+  `CREATE INDEX IF NOT EXISTS material_issuances_status_idx ON material_issuances(status)`,
+  `CREATE INDEX IF NOT EXISTS contact_messages_status_idx ON contact_messages(status)`,
+  `CREATE INDEX IF NOT EXISTS price_rules_active_idx ON price_rules(active_from, active_to)`,
+  `CREATE INDEX IF NOT EXISTS categories_parent_idx ON categories(parent_id)`,
+  `CREATE INDEX IF NOT EXISTS products_category_idx ON products(category_id)`,
+  `CREATE INDEX IF NOT EXISTS products_pricing_model_idx ON products(pricing_model)`,
+  `CREATE INDEX IF NOT EXISTS price_rules_product_idx ON price_rules(product_id)`,
+  `CREATE INDEX IF NOT EXISTS price_bands_rule_idx ON price_bands(price_rule_id)`,
+  `CREATE INDEX IF NOT EXISTS product_options_product_idx ON product_options(product_id)`,
+  `CREATE INDEX IF NOT EXISTS product_option_values_option_idx ON product_option_values(product_option_id)`,
+  `CREATE INDEX IF NOT EXISTS product_finishing_options_product_idx ON product_finishing_options(product_id)`,
+  `CREATE INDEX IF NOT EXISTS quotes_customer_idx ON quotes(customer_id)`,
+  `CREATE INDEX IF NOT EXISTS quotes_status_idx ON quotes(status)`,
+  `CREATE INDEX IF NOT EXISTS quote_lines_quote_idx ON quote_lines(quote_id)`,
+  `CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders(customer_id)`,
+  `CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status)`,
+  `CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status)`,
+  `CREATE INDEX IF NOT EXISTS jobs_assignee_idx ON jobs(assigned_to)`,
+  `CREATE INDEX IF NOT EXISTS job_status_history_job_idx ON job_status_history(job_id)`,
+  `CREATE INDEX IF NOT EXISTS job_files_job_idx ON job_files(job_id)`,
+  `CREATE INDEX IF NOT EXISTS chat_threads_job_idx ON chat_threads(job_id)`,
+  `CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON chat_messages(thread_id)`,
 ];
 
-type SchemaExecutor = {
-  execute: (query: SQL) => Promise<unknown>;
-};
+// ── Execute ─────────────────────────────────────────────────────────────────
 
-/**
- * Apply the full idempotent schema to the given executor (a drizzle database
- * instance). Used by the default DB (ensureSchema) and by the data-copy tool
- * so a brand-new target database is migrated before rows are copied in.
- */
-export async function ensureSchemaWith(executor: SchemaExecutor): Promise<void> {
-  // Enums first (Postgres has no CREATE TYPE IF NOT EXISTS).
-  for (const [type, values] of ENUM_DDL) {
-    const valueList = values.map((v) => `'${v}'`).join(", ");
-    await executor.execute(
-      sql.raw(
-        `DO $$ BEGIN CREATE TYPE ${type} AS ENUM (${valueList}); ` +
-          `EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
-      ),
-    );
-  }
-
-  // Tables (parents before children so FKs resolve on a fresh database).
-  for (const stmt of TABLE_DDL) {
-    await executor.execute(sql.raw(stmt));
-  }
-
-  // Indexes (uniqueness comes from these, matching schema.ts exactly).
-  for (const stmt of INDEX_DDL) {
-    await executor.execute(sql.raw(stmt));
-  }
-
-  // Additive columns for databases created before these columns existed.
-  for (const stmt of ALTER_DDL) {
-    await executor.execute(sql.raw(stmt));
+async function runDDL(label: string, statements: string[]) {
+  for (const stmt of statements) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (err: any) {
+      // "already exists" is expected and safe to ignore
+      if (err?.message?.includes("already exists")) continue;
+      console.error(`[bootstrap] ${label} error:`, err.message || err);
+    }
   }
 }
 
-export async function ensureSchema(): Promise<void> {
+export async function ensureSchemaWith(targetDb: any) {
+  // Use the raw sql from drizzle-orm for raw DDL execution
+  const { sql: rawSql } = await import("drizzle-orm");
+
+  // 1. Enums
+  for (const [type, values] of ENUM_DDL) {
+    try {
+      const createEnum = rawSql.raw(
+        `DO $$ BEGIN
+          CREATE TYPE ${type} AS ENUM (${values.map((v) => `'${v}'`).join(", ")});
+        EXCEPTION
+          WHEN duplicate_object THEN null;
+        END $$`
+      );
+      await targetDb.execute(createEnum);
+    } catch (err: any) {
+      if (err?.message?.includes("already exists")) continue;
+      console.error(`[bootstrap] enum ${type} error:`, err.message || err);
+    }
+  }
+
+  // 2. Tables
+  for (const stmt of TABLE_DDL) {
+    try {
+      await targetDb.execute(rawSql.raw(stmt));
+    } catch (err: any) {
+      if (err?.message?.includes("already exists")) continue;
+      console.error(`[bootstrap] table error:`, err.message || err);
+    }
+  }
+
+  // 3. Additive columns
+  for (const stmt of ADDITIVE_COLUMNS) {
+    try {
+      await targetDb.execute(rawSql.raw(stmt));
+    } catch (err: any) {
+      if (err?.message?.includes("already exists")) continue;
+      console.error(`[bootstrap] column error:`, err.message || err);
+    }
+  }
+
+  // 4. Indexes
+  for (const stmt of INDEXES) {
+    try {
+      await targetDb.execute(rawSql.raw(stmt));
+    } catch (err: any) {
+      if (err?.message?.includes("already exists")) continue;
+      console.error(`[bootstrap] index error:`, err.message || err);
+    }
+  }
+}
+
+export async function ensureSchema() {
   await ensureSchemaWith(db);
-  console.log("[wxy-api] schema up to date (auto-migration complete)");
 }

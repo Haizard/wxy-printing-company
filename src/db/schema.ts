@@ -59,7 +59,25 @@ export const orderStatusEnum = pgEnum("order_status", [
 export const movementTypeEnum = pgEnum("movement_type", [
   "in",
   "out",
+  "waste",
+  "return",
   "adjustment",
+  "issue",
+  "return_to_stock",
+]);
+
+export const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
+  "draft",
+  "ordered",
+  "received",
+  "cancelled",
+]);
+
+export const materialIssuanceStatusEnum = pgEnum("material_issuance_status", [
+  "issued",
+  "partial_return",
+  "returned",
+  "consumed",
 ]);
 
 // ── Users ───────────────────────────────────────────────────────────────────
@@ -141,7 +159,7 @@ export const productOptions = pgTable(
       .references(() => products.id),
     optionKey: text("option_key").notNull(),
     optionLabel: text("option_label").notNull(),
-    inputType: text("input_type").notNull(), // 'select' | 'number' | 'dimension' | 'boolean'
+    inputType: text("input_type").notNull(),
     isRequired: boolean("is_required").default(true),
     sortOrder: integer("sort_order").default(0),
   },
@@ -168,7 +186,7 @@ export const productOptionValues = pgTable(
   }),
 );
 
-// ── Pricing Engine ──────────────────────────────────────────────────────────
+// ── Price Rules & Bands ─────────────────────────────────────────────────────
 
 export const priceRules = pgTable(
   "price_rules",
@@ -190,10 +208,7 @@ export const priceRules = pgTable(
   },
   (table) => ({
     productIdx: index("price_rules_product_idx").on(table.productId),
-    activeIdx: index("price_rules_active_idx").on(
-      table.activeFrom,
-      table.activeTo,
-    ),
+    activeIdx: index("price_rules_active_idx").on(table.activeFrom, table.activeTo),
   }),
 );
 
@@ -391,6 +406,7 @@ export const inventoryItems = pgTable(
     name: text("name").notNull(),
     sku: text("sku").unique(),
     unit: text("unit").notNull(),
+    category: text("category").default("general"),
     currentQty: numeric("current_qty").notNull().default("0"),
     reorderLevel: numeric("reorder_level").notNull().default("0"),
     unitCost: integer("unit_cost"),
@@ -399,6 +415,7 @@ export const inventoryItems = pgTable(
   },
   (table) => ({
     skuIdx: uniqueIndex("inventory_items_sku_idx").on(table.sku),
+    categoryIdx: index("inventory_items_category_idx").on(table.category),
   }),
 );
 
@@ -413,6 +430,8 @@ export const inventoryMovements = pgTable(
     movementType: movementTypeEnum("movement_type").notNull(),
     quantity: numeric("quantity").notNull(),
     reason: text("reason"),
+    wasteReason: text("waste_reason"),
+    approvedBy: uuid("approved_by").references(() => users.id),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),
@@ -420,6 +439,105 @@ export const inventoryMovements = pgTable(
   },
   (table) => ({
     itemIdx: index("inventory_movements_item_idx").on(table.itemId),
+    jobIdx: index("inventory_movements_job_idx").on(table.jobId),
+    typeIdx: index("inventory_movements_type_idx").on(table.movementType),
+  }),
+);
+
+// ── Suppliers ───────────────────────────────────────────────────────────────
+
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    contactPerson: text("contact_person"),
+    email: text("email"),
+    phone: text("phone"),
+    address: text("address"),
+    notes: text("notes"),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    nameIdx: index("suppliers_name_idx").on(table.name),
+  }),
+);
+
+// ── Purchase Orders ─────────────────────────────────────────────────────────
+
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderNumber: text("order_number").unique().notNull(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id),
+    status: purchaseOrderStatusEnum("status").default("draft"),
+    totalAmount: integer("total_amount").default(0),
+    notes: text("notes"),
+    expectedDate: date("expected_date"),
+    receivedDate: date("received_date"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    supplierIdx: index("purchase_orders_supplier_idx").on(table.supplierId),
+    statusIdx: index("purchase_orders_status_idx").on(table.status),
+  }),
+);
+
+export const purchaseOrderItems = pgTable(
+  "purchase_order_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id),
+    inventoryItemId: uuid("inventory_item_id")
+      .notNull()
+      .references(() => inventoryItems.id),
+    quantity: numeric("quantity").notNull(),
+    unitCost: integer("unit_cost").notNull(),
+    totalCost: integer("total_cost").notNull(),
+  },
+  (table) => ({
+    orderIdx: index("purchase_order_items_order_idx").on(table.purchaseOrderId),
+  }),
+);
+
+// ── Material Issuances (linked to jobs) ─────────────────────────────────────
+
+export const materialIssuances = pgTable(
+  "material_issuances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id),
+    inventoryItemId: uuid("inventory_item_id")
+      .notNull()
+      .references(() => inventoryItems.id),
+    quantityIssued: numeric("quantity_issued").notNull(),
+    quantityUsed: numeric("quantity_used").default("0"),
+    quantityReturned: numeric("quantity_returned").default("0"),
+    quantityWaste: numeric("quantity_waste").default("0"),
+    wasteReason: text("waste_reason"),
+    status: materialIssuanceStatusEnum("status").default("issued"),
+    issuedBy: uuid("issued_by")
+      .notNull()
+      .references(() => users.id),
+    issuedAt: timestamp("issued_at").defaultNow(),
+    returnedAt: timestamp("returned_at"),
+    notes: text("notes"),
+  },
+  (table) => ({
+    jobIdx: index("material_issuances_job_idx").on(table.jobId),
+    itemIdx: index("material_issuances_item_idx").on(table.inventoryItemId),
+    statusIdx: index("material_issuances_status_idx").on(table.status),
   }),
 );
 
@@ -453,16 +571,35 @@ export const chatMessages = pgTable(
     body: text("body"),
     attachmentUrl: text("attachment_url"),
     createdAt: timestamp("created_at").defaultNow(),
-    readBy: uuid("read_by").array().default([]),
+    readBy: text("read_by").array().default([]),
   },
   (table) => ({
     threadIdx: index("chat_messages_thread_idx").on(table.threadId),
   }),
 );
 
+// ── Contact Messages ────────────────────────────────────────────────────────
+
+export const contactMessages = pgTable(
+  "contact_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    subject: text("subject").notNull(),
+    message: text("message").notNull(),
+    status: text("status").notNull().default("new"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index("contact_messages_status_idx").on(table.status),
+  }),
+);
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
-export const categoriesRelations = relations(categories, ({ many, one }) => ({
+export const categoriesRelations = relations(categories, ({ one, many }) => ({
   parent: one(categories, {
     fields: [categories.parentId],
     references: [categories.id],
@@ -515,15 +652,36 @@ export const jobsRelations = relations(jobs, ({ one }) => ({
   }),
 }));
 
-// ── Contact messages (public contact form → admin inbox) ───────────────────
+export const purchaseOrdersRelations = relations(purchaseOrders, ({ one, many }) => ({
+  supplier: one(suppliers, {
+    fields: [purchaseOrders.supplierId],
+    references: [suppliers.id],
+  }),
+  items: many(purchaseOrderItems),
+}));
 
-export const contactMessages = pgTable("contact_messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone"),
-  subject: text("subject").notNull(),
-  message: text("message").notNull(),
-  status: text("status").notNull().default("new"), // "new" | "read"
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one }) => ({
+  purchaseOrder: one(purchaseOrders, {
+    fields: [purchaseOrderItems.purchaseOrderId],
+    references: [purchaseOrders.id],
+  }),
+  inventoryItem: one(inventoryItems, {
+    fields: [purchaseOrderItems.inventoryItemId],
+    references: [inventoryItems.id],
+  }),
+}));
+
+export const materialIssuancesRelations = relations(materialIssuances, ({ one }) => ({
+  job: one(jobs, {
+    fields: [materialIssuances.jobId],
+    references: [jobs.id],
+  }),
+  inventoryItem: one(inventoryItems, {
+    fields: [materialIssuances.inventoryItemId],
+    references: [inventoryItems.id],
+  }),
+  issuedByUser: one(users, {
+    fields: [materialIssuances.issuedBy],
+    references: [users.id],
+  }),
+}));
