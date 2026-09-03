@@ -40,6 +40,58 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ── User Management (admin) ─────────────────────────────────────────────────
+
+app.get("/api/users", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const allUsers = await db.select().from(users).orderBy(sql`${users.createdAt} DESC NULLS LAST`);
+    const safe = allUsers.map(({ passwordHash, ...rest }) => rest);
+    res.json(safe);
+  } catch (error) {
+    console.error("Fetch users error:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.put("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const id = req.params.id as string;
+    const { fullName, email, phone, role, isActive } = req.body;
+    const updates: Record<string, any> = {};
+    if (fullName !== undefined) updates.fullName = fullName;
+    if (email !== undefined) updates.email = email || null;
+    if (phone !== undefined) updates.phone = phone || null;
+    if (role !== undefined) updates.role = role;
+    if (isActive !== undefined) updates.isActive = isActive;
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No fields to update" });
+    const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    const { passwordHash, ...safe } = updated;
+    res.json(safe);
+  } catch (error) {
+    console.error("Update user error:", error);
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+app.delete("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const id = req.params.id as string;
+    if (user.userId === id) return res.status(400).json({ error: "Cannot delete your own account" });
+    await db.delete(users).where(eq(users.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete user error:", error);
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
 // ── Categories ──────────────────────────────────────────────────────────────
 
 app.get("/api/categories", async (_req, res) => {
