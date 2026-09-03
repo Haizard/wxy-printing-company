@@ -50,6 +50,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/jspdf": "^2.0.0",
     "@types/node": "^26.4.1",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
