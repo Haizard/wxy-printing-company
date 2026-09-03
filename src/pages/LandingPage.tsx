@@ -4,13 +4,58 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   Sparkles,
-  Zap,
   ArrowUpRight,
-  CheckCircle2,
+  Star,
+  Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SITE, FAMILIES, STANDARDS } from "@/lib/site-content";
+
+const testimonials = [
+  {
+    name: "Emmanuel Mwangoka",
+    role: "Marketing Director, Vodacom Tanzania",
+    rating: 5,
+    quote:
+      "WXY completely transformed our retail store branding across 12 branches. The quality of signage, speed of delivery and attention to detail exceeded every expectation.",
+  },
+  {
+    name: "Sarah Kimaro",
+    role: "Founder, Kilimanjaro Breweries",
+    rating: 5,
+    quote:
+      "From concept to installation, their team handled our entire product launch campaign. The banners, POS materials and branded merchandise were absolutely stunning.",
+  },
+  {
+    name: "David Mushi",
+    role: "Operations Manager, Taifa Gas",
+    rating: 5,
+    quote:
+      "We have used WXY for our fuel station branding across 40+ stations. Consistent quality, competitive pricing and they always meet tight deadlines.",
+  },
+  {
+    name: "Grace Lobulu",
+    role: "Creative Director, Twiga Foods Tanzania",
+    rating: 4,
+    quote:
+      "Professional, reliable and creative. WXY handles all our event signage, trade show booths and promotional materials. They understand brand identity inside out.",
+  },
+  {
+    name: "John Makamba",
+    role: "CEO, Johnnie Walker Distributors",
+    rating: 5,
+    quote:
+      "The illuminated signage they installed at our flagship showroom is world-class. Their fabrication team is incredibly skilled and the project was delivered ahead of schedule.",
+  },
+  {
+    name: "Amina Hassan",
+    role: "Events Manager, Serengeti Plaza",
+    rating: 5,
+    quote:
+      "Every event we host features WXY work — from large format backdrops to branded lanyards and bags. Their turnaround time is unmatched in the industry.",
+  },
+];
 
 const stats = [
   { value: "04", label: "Core Divisions" },
@@ -325,43 +370,70 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Testimonials */}
       <section className="px-4 lg:px-8 py-20">
-        <div className="max-w-3xl mx-auto">
-          <Card variant="strong" className="text-center p-8 lg:p-12">
-            <Zap className="w-12 h-12 text-[var(--accent-primary)] mx-auto mb-4" />
-            <h2 className="text-title-1 font-bold text-[var(--text-primary)] mb-4">
-              Let's work together
-            </h2>
-            <p className="text-body text-[var(--text-secondary)] mb-8 max-w-lg mx-auto">
-              Whether you're launching a business, hosting an event, rebranding
-              or need a reliable print partner — {SITE.name} is ready to bring
-              your ideas to life.
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-14"
+          >
+            <p className="text-caption font-semibold uppercase tracking-widest text-[var(--accent-primary)] mb-3">
+              Trusted by brands across Tanzania
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/contact">
-                <Button size="lg">
-                  Get in Touch
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Link to="/our-work">
-                <Button variant="outline" size="lg">
-                  See Our Work
-                </Button>
-              </Link>
-            </div>
-            <div className="flex items-center justify-center gap-6 mt-8 flex-wrap text-caption text-[var(--text-tertiary)]">
-              {["Concept to completion", "In-house manufacturing", "Nationwide delivery"].map(
-                (point) => (
-                  <span key={point} className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-[var(--accent-success)]" />
-                    {point}
-                  </span>
-                ),
-              )}
-            </div>
-          </Card>
+            <h2 className="text-title-1 lg:text-title-2 font-bold text-[var(--text-primary)] mb-4">
+              What our clients say about us
+            </h2>
+            <p className="text-body text-[var(--text-secondary)] max-w-xl mx-auto">
+              From startups to established enterprises, we deliver results that speak for themselves.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {testimonials.map((t, index) => (
+              <motion.div
+                key={t.name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+                className="h-full"
+              >
+                <Card className="h-full flex flex-col">
+                  <div className="p-6 flex flex-col flex-1">
+                    <div className="flex items-center gap-1 mb-4">
+                      {Array.from({ length: t.rating }).map((_, i) => (
+                        <Star key={i} className="w-4 h-4 fill-[var(--accent-secondary)] text-[var(--accent-secondary)]" />
+                      ))}
+                    </div>
+                    <Quote className="w-6 h-6 text-[var(--accent-primary)] opacity-30 mb-2" />
+                    <p className="text-body text-[var(--text-primary)] mb-5 flex-1">
+                      {t.quote}
+                    </p>
+                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-[var(--glass-border)]">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-tertiary)] flex items-center justify-center text-white font-bold text-caption">
+                        {t.name.split(" ").map((n) => n[0]).join("")}
+                      </div>
+                      <div>
+                        <p className="text-subhead font-semibold text-[var(--text-primary)]">{t.name}</p>
+                        <p className="text-caption text-[var(--text-tertiary)]">{t.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="text-center mt-10">
+            <Link to="/auth">
+              <Button size="lg">
+                Join Our Clients
+                <ArrowRight className="w-5 h-5" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
