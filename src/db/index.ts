@@ -15,9 +15,14 @@ if (!connectionString) {
   );
 }
 
-// For SSL connections (required by Luceris)
+// For SSL connections (required by Luceris). Serverless safety: keep the pool
+// to a single connection per function instance (default is 10, which exhausts
+// small role limits under concurrent invocations) and release it after 20s of
+// idle so warm instances don't hold the connection forever.
 const client = postgres(connectionString || "postgres://localhost:5432/wxy_placeholder", {
   ssl: "require",
+  max: 1,
+  idle_timeout: 20,
 });
 
 export const db = drizzle(client, { schema });
