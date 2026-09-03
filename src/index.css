@@ -223,7 +223,7 @@
 }
 
 /* Force all sections, containers, and card-like elements to clip overflow */
-section, [role='region'], article, .glass-card, .glass-card-strong, .glass-card-subtle, [class*='card'], [class*='Card'] {
+section, [role='region'], article, aside, .glass-card, .glass-card-strong, .glass-card-subtle, [class*='card'], [class*='Card'] {
   overflow: hidden;
 }
 
