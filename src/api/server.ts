@@ -1524,6 +1524,129 @@ app.delete("/api/contact-messages/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Admin: DB Migration endpoint ──────────────────────────────────────────
+// GET /api/admin/migrate?key=<MIGRATE_KEY>  — opens in browser to trigger
+// Copies all rows from SOURCE_DATABASE_URL (old DB) into DATABASE_URL (new DB).
+
+app.get("/api/admin/migrate", async (req, res) => {
+  try {
+    const sourceUrl = process.env.SOURCE_DATABASE_URL;
+    const targetUrl = process.env.DATABASE_URL;
+    const migrateKey = process.env.MIGRATE_KEY;
+
+    if (!migrateKey || req.query.key !== migrateKey) {
+      return res.status(403).json({ error: "Invalid or missing MIGRATE_KEY. Add it to Vercel env vars and pass ?key=..." });
+    }
+
+    if (!sourceUrl) {
+      return res.status(400).json({ error: "SOURCE_DATABASE_URL env var is not set. Add it in Vercel → Settings → Environment Variables." });
+    }
+    if (!targetUrl) {
+      return res.status(400).json({ error: "DATABASE_URL env var is not set." });
+    }
+
+    // Dynamic imports to keep the rest of the bundle light
+    const postgresMod = await import("postgres");
+    const drizzleMod = await import("drizzle-orm/postgres-js");
+    const schemaMod = await import("../db/schema");
+    const bootstrapMod = await import("../db/bootstrap");
+    const { count } = await import("drizzle-orm");
+
+    const opts = { ssl: "require", max: 1, connect_timeout: 15, idle_timeout: 10 } as const;
+    const source = postgresMod.default(sourceUrl, opts);
+    const target = postgresMod.default(targetUrl, opts);
+    const sourceDb = drizzleMod.drizzle(source, { schema: schemaMod });
+    const targetDb = drizzleMod.drizzle(target, { schema: schemaMod });
+
+    // 1. Migrate target schema
+    await bootstrapMod.ensureSchemaWith(targetDb);
+
+    // 2. Check if target already has data
+    const [existing] = await targetDb.select({ n: count() }).from(schemaMod.users);
+    if ((existing?.n ?? 0) > 0) {
+      await source.end();
+      await target.end();
+      return res.status(409).json({ error: "Target database already has users — aborting to avoid duplicates. Create a fresh empty DB." });
+    }
+
+    // 3. Foreign-key-safe copy order
+    const TABLES: [string, any][] = [
+      ["users", schemaMod.users],
+      ["categories", schemaMod.categories],
+      ["products", schemaMod.products],
+      ["product_options", schemaMod.productOptions],
+      ["product_option_values", schemaMod.productOptionValues],
+      ["finishing_options", schemaMod.finishingOptions],
+      ["product_finishing_options", schemaMod.productFinishingOptions],
+      ["price_rules", schemaMod.priceRules],
+      ["price_bands", schemaMod.priceBands],
+      ["quotes", schemaMod.quotes],
+      ["quote_lines", schemaMod.quoteLines],
+      ["orders", schemaMod.orders],
+      ["jobs", schemaMod.jobs],
+      ["job_status_history", schemaMod.jobStatusHistory],
+      ["job_files", schemaMod.jobFiles],
+      ["inventory_items", schemaMod.inventoryItems],
+      ["inventory_movements", schemaMod.inventoryMovements],
+      ["chat_threads", schemaMod.chatThreads],
+      ["chat_messages", schemaMod.chatMessages],
+      ["contact_messages", schemaMod.contactMessages],
+    ];
+
+    const results: Record<string, { rows: number; error?: string }> = {};
+    const BATCH = 200;
+
+    for (const [tableName, tableSchema] of TABLES) {
+      try {
+        const rows: any[] = await sourceDb.select().from(tableSchema);
+        if (rows.length === 0) { results[tableName] = { rows: 0 }; continue; }
+
+        // Categories need topological insert (self-referencing parent_id)
+        if (tableName === "categories") {
+          const remaining = [...rows];
+          const copiedIds = new Set<string>();
+          let totalCopied = 0;
+          while (remaining.length > 0) {
+            const ready = remaining.filter(
+              (r: any) => r.parentId === null || r.parentId === undefined || copiedIds.has(r.parentId),
+            );
+            if (ready.length === 0) break;
+            for (let i = 0; i < ready.length; i += BATCH) {
+              await targetDb.insert(tableSchema).values(ready.slice(i, i + BATCH));
+            }
+            totalCopied += ready.length;
+            ready.forEach((r: any) => copiedIds.add(r.id));
+            for (const r of ready) {
+              const idx = remaining.findIndex((x: any) => x.id === r.id);
+              if (idx !== -1) remaining.splice(idx, 1);
+            }
+          }
+          results[tableName] = { rows: totalCopied, error: remaining.length > 0 ? `${remaining.length} orphaned` : undefined };
+          continue;
+        }
+
+        for (let i = 0; i < rows.length; i += BATCH) {
+          await targetDb.insert(tableSchema).values(rows.slice(i, i + BATCH));
+        }
+        results[tableName] = { rows: rows.length };
+      } catch (err: any) {
+        results[tableName] = { rows: 0, error: err.message?.slice(0, 200) || "unknown error" };
+      }
+    }
+
+    await source.end();
+    await target.end();
+
+    const total = Object.values(results).reduce((s, r) => s + r.rows, 0);
+    const errors = Object.entries(results).filter(([, r]) => r.error);
+
+    res.json({ success: true, total, tables: results, errors: errors.length > 0 ? errors : undefined });
+  } catch (error: any) {
+    console.error("Migration error:", error);
+    res.status(500).json({ error: error.message || "Migration failed" });
+  }
+});
+
 // ── Start Server ────────────────────────────────────────────────────────────
 
 const PORT = process.env.API_PORT || 3001;
