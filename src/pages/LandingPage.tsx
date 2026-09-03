@@ -270,55 +270,103 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {FAMILIES.map((family, index) => (
-              <motion.div
-                key={family.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
-                className="h-full"
-              >
-                <Card className="h-full overflow-hidden hover:shadow-[var(--glass-shadow)] transition-all duration-300 flex flex-col">
-                  <div className={`h-1.5 bg-gradient-to-r ${family.gradient}`} />
-                  <div className="p-6 flex flex-col flex-1">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[rgba(255,90,60,0.1)] flex items-center justify-center">
-                          <family.icon className="w-6 h-6 text-[var(--accent-primary)]" />
-                        </div>
-                        <div>
-                          <p className="text-caption font-semibold text-[var(--text-tertiary)]">
-                            {family.num}
-                          </p>
-                          <h3 className="text-headline font-semibold">
-                            {family.title}
-                          </h3>
-                        </div>
-                      </div>
-                      <ArrowUpRight className="w-5 h-5 text-[var(--text-tertiary)] flex-shrink-0" />
+          {/* Featured layout: 1 large left + 3 stacked right */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Left: featured large card */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="h-full"
+            >
+              <Link to="/products" className="block h-full">
+                <div className="relative h-full min-h-[400px] lg:min-h-[460px] rounded-[var(--radius-lg)] overflow-hidden group cursor-pointer">
+                  {/* Background gradient overlay */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${FAMILIES[0].gradient} opacity-90`} />
+                  {/* Decorative pattern */}
+                  <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-8 right-8 w-40 h-40 border-2 border-white rounded-full" />
+                    <div className="absolute bottom-12 left-12 w-24 h-24 border-2 border-white rounded-full" />
+                    <div className="absolute top-1/2 left-1/3 w-16 h-16 border border-white rounded-full" />
+                  </div>
+                  {/* Content */}
+                  <div className="relative z-10 h-full flex flex-col justify-between p-8 text-white">
+                    <div>
+                      <span className="inline-block text-caption font-bold uppercase tracking-widest bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-pill mb-5">
+                        {FAMILIES[0].num} Division
+                      </span>
+                      <h3 className="text-title-1 lg:text-large-title font-bold mb-3 leading-tight">
+                        {FAMILIES[0].title}
+                      </h3>
+                      <p className="text-body text-white/80 max-w-md">
+                        {FAMILIES[0].tagline}
+                      </p>
                     </div>
-                    <p className="text-caption text-[var(--text-secondary)] mb-4">
-                      {family.tagline}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mt-auto">
-                      {family.groups.map((group) => (
-                        <span
-                          key={group.label}
-                          className="px-2.5 py-1 rounded-pill bg-[var(--glass-fill-subtle)] text-caption font-medium text-[var(--text-secondary)]"
-                        >
-                          {group.label}
-                        </span>
-                      ))}
+                    <div>
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        {FAMILIES[0].groups.map((group) => (
+                          <span
+                            key={group.label}
+                            className="px-3 py-1.5 rounded-pill bg-white/15 backdrop-blur-sm text-caption font-medium text-white/90 border border-white/20"
+                          >
+                            {group.label}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 text-white/90 group-hover:text-white transition-colors">
+                        <span className="text-subhead font-semibold">Explore Division</span>
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </div>
                     </div>
                   </div>
-                </Card>
-              </motion.div>
-            ))}
+                </div>
+              </Link>
+            </motion.div>
+
+            {/* Right: 3 stacked cards */}
+            <div className="flex flex-col gap-5">
+              {FAMILIES.slice(1).map((family, index) => (
+                <motion.div
+                  key={family.id}
+                  initial={{ opacity: 0, x: 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.12 }}
+                  className="flex-1"
+                >
+                  <Link to="/products" className="block h-full">
+                    <div className="relative h-full rounded-[var(--radius-lg)] overflow-hidden group cursor-pointer min-h-[130px]">
+                      {/* Background gradient overlay */}
+                      <div className={`absolute inset-0 bg-gradient-to-r ${family.gradient} opacity-90`} />
+                      {/* Content */}
+                      <div className="relative z-10 h-full flex items-center gap-6 p-6 text-white">
+                        <div className="w-16 h-16 rounded-[var(--radius-md)] bg-white/15 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                          <family.icon className="w-8 h-8 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-caption font-bold uppercase tracking-widest text-white/60">
+                              {family.num}
+                            </span>
+                          </div>
+                          <h3 className="text-headline font-bold mb-1 truncate">
+                            {family.title}
+                          </h3>
+                          <p className="text-caption text-white/70 line-clamp-2">
+                            {family.tagline}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
           </div>
 
-          <div className="text-center mt-8">
+          <div className="text-center mt-10">
             <Link to="/products">
               <Button variant="outline" size="lg">
                 View the full catalogue
