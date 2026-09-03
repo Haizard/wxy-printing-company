@@ -5,6 +5,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/api",
+      "destination": "/api"
+    },
+    {
       "source": "/((?!api(?:/|$)|.*\\.(?:js|css|svg|png|jpg|jpeg|gif|webp|avif|ico|pdf|woff|woff2|ttf|otf|eot|txt|json|map)$).*)",
       "destination": "/index.html"
     }
