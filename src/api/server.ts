@@ -27,6 +27,7 @@ import {
   purchaseOrders,
   purchaseOrderItems,
   materialIssuances,
+  materialCategories,
 } from "../db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import authRoutes, { authMiddleware } from "./auth";
@@ -1782,6 +1783,61 @@ app.get("/api/inventory/dashboard", authMiddleware, async (_req, res) => {
 });
 
 // ── Suppliers CRUD ──────────────────────────────────────────────────────────
+
+// ── Material Categories CRUD ────────────────────────────────────────────────
+
+app.get("/api/material-categories", authMiddleware, async (_req, res) => {
+  try {
+    const cats = await db.select().from(materialCategories).orderBy(sql`${materialCategories.sortOrder} ASC`);
+    res.json(cats);
+  } catch (error) {
+    console.error("Fetch material categories error:", error);
+    res.status(500).json({ error: "Failed to fetch material categories" });
+  }
+});
+
+app.post("/api/material-categories", authMiddleware, async (req, res) => {
+  try {
+    const { name, value, color, icon, sortOrder } = req.body;
+    if (!name || !value) return res.status(400).json({ error: "Name and value are required" });
+    const [cat] = await db.insert(materialCategories).values({
+      name, value: value.toLowerCase().replace(/\s+/g, "_"),
+      color: color || null, icon: icon || null, sortOrder: sortOrder || 0,
+    }).returning();
+    res.status(201).json(cat);
+  } catch (error: any) {
+    console.error("Create material category error:", error);
+    res.status(500).json({ error: error.message || "Failed to create category" });
+  }
+});
+
+app.put("/api/material-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const { name, value, color, icon, sortOrder, isActive } = req.body;
+    const [updated] = await db.update(materialCategories).set({
+      name, value: value?.toLowerCase().replace(/\s+/g, "_"),
+      color, icon, sortOrder, isActive,
+    }).where(eq(materialCategories.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Category not found" });
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update material category error:", error);
+    res.status(500).json({ error: error.message || "Failed to update category" });
+  }
+});
+
+app.delete("/api/material-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.delete(materialCategories).where(eq(materialCategories.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete material category error:", error);
+    res.status(500).json({ error: "Failed to delete category" });
+  }
+});
+
 
 app.get("/api/suppliers", authMiddleware, async (_req, res) => {
   try {

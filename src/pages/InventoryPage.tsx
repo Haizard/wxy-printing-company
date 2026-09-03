@@ -13,17 +13,7 @@ import { formatTZS } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-const MATERIAL_CATEGORIES = [
-  { value: "general", label: "General" },
-  { value: "paper", label: "Paper & Cardboard" },
-  { value: "ink", label: "Ink & Consumables" },
-  { value: "vinyl", label: "Vinyl & Banners" },
-  { value: "acrylic", label: "Acrylic & Rigid" },
-  { value: "finishing", label: "Finishing Materials" },
-  { value: "hardware", label: "Hardware & Accessories" },
-  { value: "packaging", label: "Packaging" },
-  { value: "fabric", label: "Fabric & Textile" },
-];
+// Material categories are fetched from the API. This default list is only used as a fallback seed.
 
 const UNITS = ["sheet", "roll", "meter", "sqm", "liter", "ml", "kg", "gram", "cartridge", "pc", "box", "pack", "coil", "strip"];
 
@@ -61,9 +51,68 @@ export default function InventoryPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [movementHistory, setMovementHistory] = useState<any[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [materialCategories, setMaterialCategories] = useState<any[]>([]);
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<any>(null);
+  const [catForm, setCatForm] = useState({ name: "", value: "", color: "", icon: "", sortOrder: 0 });
+
+  // Fetch material categories from API
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      if (res.ok) setMaterialCategories(await res.json());
+    } catch (e) { console.error("Failed to fetch categories", e); }
+  };
+
+  // Seed default categories if empty
+  const seedDefaultCategories = async () => {
+    try {
+      const res = await fetch("/api/material-categories", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      if (res.ok) {
+        const existing = await res.json();
+        if (existing.length === 0) {
+          const defaults = [
+            { name: "General", value: "general", color: "bg-[var(--glass-fill-subtle)] text-[var(--text-secondary)]" },
+            { name: "Paper & Cardboard", value: "paper", color: "bg-[rgba(46,125,255,0.12)] text-[var(--accent-tertiary)]" },
+            { name: "Ink & Consumables", value: "ink", color: "bg-[rgba(255,59,48,0.12)] text-[var(--accent-danger)]" },
+            { name: "Vinyl & Banners", value: "vinyl", color: "bg-[rgba(52,199,89,0.12)] text-[var(--accent-success)]" },
+            { name: "Acrylic & Rigid", value: "acrylic", color: "bg-[rgba(255,176,32,0.12)] text-[var(--accent-secondary)]" },
+            { name: "Finishing Materials", value: "finishing", color: "bg-[rgba(175,82,222,0.12)] text-[#AF52DE]" },
+            { name: "Hardware & Accessories", value: "hardware", color: "bg-[rgba(90,90,90,0.12)] text-[var(--text-secondary)]" },
+            { name: "Packaging", value: "packaging", color: "bg-[rgba(255,149,0,0.12)] text-[var(--accent-warning)]" },
+            { name: "Fabric & Textile", value: "fabric", color: "bg-[rgba(0,122,255,0.12)] text-[#007AFF]" },
+          ];
+          for (const cat of defaults) {
+            await fetch("/api/material-categories", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` }, body: JSON.stringify(cat) });
+          }
+          fetchCategories();
+        }
+      }
+    } catch (e) { console.error("Failed to seed categories", e); }
+  };
+
+  const handleSaveCategory = async () => {
+    try {
+      const method = editingCat ? "PUT" : "POST";
+      const url = editingCat ? `/api/material-categories/${editingCat.id}` : "/api/material-categories";
+      await fetch(url, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` }, body: JSON.stringify(catForm) });
+      setCatDialogOpen(false); setEditingCat(null); setCatForm({ name: "", value: "", color: "", icon: "", sortOrder: 0 });
+      fetchCategories();
+    } catch (e) { console.error("Failed to save category", e); }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm("Delete this category?")) return;
+    try {
+      await fetch(`/api/material-categories/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("auth_token")}` } });
+      fetchCategories();
+    } catch (e) { console.error("Failed to delete category", e); }
+  };
 
   useEffect(() => {
     fetchDashboard();
+    fetchCategories();
+    seedDefaultCategories();
   }, []);
 
   const fetchDashboard = async () => {
@@ -140,9 +189,14 @@ export default function InventoryPage() {
             <p className="text-body text-[var(--text-secondary)] mt-1">Materials & consumables management</p>
           </div>
           {canEdit && (
-            <Button size="sm" onClick={openCreateItem}>
-              <Plus className="w-4 h-4 mr-1" /> Add Material
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => { setCatDialogOpen(true); setEditingCat(null); setCatForm({ name: "", value: "", color: "", icon: "", sortOrder: 0 }); }}>
+                <Pencil className="w-4 h-4 mr-1" /> Manage Categories
+              </Button>
+              <Button size="sm" onClick={openCreateItem}>
+                <Plus className="w-4 h-4 mr-1" /> Add Material
+              </Button>
+            </div>
           )}
         </div>
       </motion.div>
@@ -177,9 +231,9 @@ export default function InventoryPage() {
       <div className="flex items-center gap-2 flex-wrap">
         <Filter className="w-4 h-4 text-[var(--text-tertiary)]" />
         <Button size="sm" variant={categoryFilter === "all" ? "default" : "outline"} onClick={() => setCategoryFilter("all")}>All</Button>
-        {MATERIAL_CATEGORIES.filter(c => c.value !== "general").map((cat) => (
+        {materialCategories.filter((c: any) => c.value !== "general").map((cat: any) => (
           <Button key={cat.value} size="sm" variant={categoryFilter === cat.value ? "default" : "outline"} onClick={() => setCategoryFilter(cat.value)}>
-            {cat.label}
+            {cat.name}
           </Button>
         ))}
       </div>
@@ -236,7 +290,7 @@ export default function InventoryPage() {
                         <div>
                           <p className="text-subhead font-semibold">{item.name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <Badge className={`${categoryColors[cat] || categoryColors.general} border-0 text-[10px]`}>{MATERIAL_CATEGORIES.find(c => c.value === cat)?.label || cat}</Badge>
+                            <Badge className={`${materialCategories.find((c: any) => c.value === cat)?.color || "bg-[var(--glass-fill-subtle)] text-[var(--text-secondary)]"} border-0 text-[10px]`}>{materialCategories.find((c: any) => c.value === cat)?.name || cat}</Badge>
                             <span className="text-caption text-[var(--text-tertiary)]">{item.unit} • {item.sku || "No SKU"}</span>
                           </div>
                         </div>
@@ -336,7 +390,7 @@ export default function InventoryPage() {
                 <Label>Category</Label>
                 <Select value={itemForm.category} onValueChange={(v) => setItemForm({ ...itemForm, category: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{MATERIAL_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{materialCategories.map((c: any) => <SelectItem key={c.value} value={c.value}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -389,6 +443,43 @@ export default function InventoryPage() {
             <div className="flex gap-3 pt-2">
               <Button className="flex-1" onClick={handleRecordMovement} disabled={movementQty <= 0}>Record Movement</Button>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Categories Dialog */}
+      <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Manage Material Categories</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2 p-3 glass-card-subtle rounded-lg">
+              <Label>{editingCat ? "Edit Category" : "Add New Category"}</Label>
+              <Input placeholder="Name (e.g. Paper & Cardboard)" value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} />
+              <Input placeholder="Value/slug (auto-generated if empty)" value={catForm.value} onChange={(e) => setCatForm({ ...catForm, value: e.target.value })} />
+              <div className="flex gap-2">
+                <Input placeholder="Color class (optional)" value={catForm.color} onChange={(e) => setCatForm({ ...catForm, color: e.target.value })} className="flex-1" />
+                <Input placeholder="Sort order" type="number" value={catForm.sortOrder} onChange={(e) => setCatForm({ ...catForm, sortOrder: Number(e.target.value) })} className="w-24" />
+              </div>
+              <Button size="sm" onClick={handleSaveCategory} disabled={!catForm.name}>{editingCat ? "Update" : "Add Category"}</Button>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {materialCategories.map((cat: any) => (
+                <div key={cat.id} className="flex items-center justify-between p-2 glass-card-subtle rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Badge className={`${cat.color || "bg-gray-100 text-gray-600"} border-0 text-xs`}>{cat.name}</Badge>
+                    <span className="text-caption text-[var(--text-tertiary)]">({cat.value})</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingCat(cat); setCatForm({ name: cat.name, value: cat.value, color: cat.color || "", icon: cat.icon || "", sortOrder: cat.sortOrder || 0 }); }}>
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteCategory(cat.id)} className="text-red-500 hover:text-red-700">
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </DialogContent>

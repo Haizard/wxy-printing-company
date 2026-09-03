@@ -444,6 +444,25 @@ export const inventoryMovements = pgTable(
   }),
 );
 
+// ── Material Categories (for inventory) ────────────────────────────────────
+
+export const materialCategories = pgTable(
+  "material_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    value: text("value").unique().notNull(),
+    color: text("color"),
+    icon: text("icon"),
+    sortOrder: integer("sort_order").default(0),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    valueIdx: index("material_categories_value_idx").on(table.value),
+  }),
+);
+
 // ── Suppliers ───────────────────────────────────────────────────────────────
 
 export const suppliers = pgTable(

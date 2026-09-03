@@ -220,6 +220,18 @@ const TABLE_DDL: string[] = [
     created_at timestamp default now()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS material_categories (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    value text unique not null,
+    color text,
+    icon text,
+    sort_order integer default 0,
+    is_active boolean default true,
+    created_at timestamp default now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS material_categories_value_idx ON material_categories(value)` ,
+
   `CREATE TABLE IF NOT EXISTS suppliers (
     id uuid primary key default gen_random_uuid(),
     name text not null,
