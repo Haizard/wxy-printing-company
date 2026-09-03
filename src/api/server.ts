@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { db } from "../db/index";
+import { ensureSchema } from "../db/bootstrap";
 import {
   categories,
   products,
@@ -1527,62 +1528,26 @@ app.delete("/api/contact-messages/:id", authMiddleware, async (req, res) => {
 
 const PORT = process.env.API_PORT || 3001;
 
-// Keep the contact_messages table in sync on boot. The schema is also
-// declared in src/db/schema.ts for drizzle tooling; this guarantees the table
-// exists even when migrations can't be run from the terminal environment.
-async function ensureContactMessagesTable() {
-  try {
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS contact_messages (
-        id uuid primary key default gen_random_uuid(),
-        name text not null,
-        email text not null,
-        phone text,
-        subject text not null,
-        message text not null,
-        status text not null default 'new',
-        created_at timestamptz default now()
-      )
-    `);
-    console.log("contact_messages table ready");
-  } catch (error) {
-    console.error("Failed to ensure contact_messages table:", error);
-  }
-}
-
-// Additive schema sync for columns added after the DB was first provisioned.
-// Declared in src/db/schema.ts for drizzle tooling; ALTER … IF NOT EXISTS keeps
-// this safe to run on every boot.
-async function ensureNewColumns() {
-  try {
-    await db.execute(sql`
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS items jsonb DEFAULT '[]'::jsonb,
-        ADD COLUMN IF NOT EXISTS notes text
-    `);
-    await db.execute(sql`
-      ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS customer_id uuid REFERENCES users(id)
-    `);
-    console.log("orders/chat_threads schema up to date");
-  } catch (error) {
-    console.error("Failed to sync schema columns:", error);
-  }
-}
-
-// On Vercel the platform imports this module as a serverless function and
-// manages its own listener. The shared database is already fully provisioned
-// (tables and additive columns were created by the dev server long ago), so
-// the boot-time schema sync is skipped there — it would otherwise grab the
-// instance's only pool connection for up to connect_timeout on every cold
-// start, starving the first request and adding connection pressure.
+// Full idempotent schema bootstrap (enums → tables → indexes → additive
+// columns). Mirrors src/db/schema.ts and is safe to run on every start — a
+// brand-new database is brought fully up to date, an existing one is a no-op.
+// On Vercel it is deliberately NOT run at cold start: the schema is migrated
+// once per deploy during the build (vercel.json buildCommand runs
+// db:migrate:auto), and repeating ~60 DDL statements inside every serverless
+// cold start would grab the instance's only connection and add connection
+// pressure.
 if (process.env.VERCEL) {
   console.log("PrintHub API running as a Vercel serverless function");
 } else {
-  ensureContactMessagesTable()
-    .then(ensureNewColumns)
+  ensureSchema()
     .then(() => {
       app.listen(PORT, () => {
         console.log(`PrintHub API server running on port ${PORT}`);
       });
+    })
+    .catch((error) => {
+      console.error("Schema bootstrap failed — API will not start:", error);
+      process.exit(1);
     });
 }
 

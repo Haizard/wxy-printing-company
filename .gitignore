@@ -7,6 +7,9 @@ node_modules/
 dist/
 build/
 
+# Generated migration runner (produced by db:migrate:auto)
+scripts/auto-migrate.mjs
+
 # Environment files
 .env
 .env.local

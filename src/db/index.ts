@@ -23,7 +23,7 @@ const client = postgres(connectionString || "postgres://localhost:5432/wxy_place
   ssl: "require",
   max: 1,
   idle_timeout: 20,
-  connect_timeout: 10,
+  connect_timeout: 30,
 });
 
 export const db = drizzle(client, { schema });
