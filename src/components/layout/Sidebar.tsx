@@ -18,6 +18,7 @@ import {
   Users,
   Truck,
   Receipt,
+  BookOpen,
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -97,6 +98,7 @@ const navGroups: NavGroup[] = [
 
 const bottomNavItems: NavItem[] = [
   { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/help", icon: BookOpen, label: "Help" },
 ];
 
 function canSee(item: NavItem | NavGroup, role?: string): boolean {

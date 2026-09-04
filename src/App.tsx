@@ -28,6 +28,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import OurWorkPage from "@/pages/OurWorkPage";
 import ContactPage from "@/pages/ContactPage";
 import ContactMessagesPage from "@/pages/ContactMessagesPage";
+import HelpPage from "@/pages/HelpPage";
 import ClientOrdersPage from "@/pages/ClientOrdersPage";
 import ClientDashboardPage from "@/pages/ClientDashboardPage";
 import SuppliersPage from "@/pages/SuppliersPage";
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/price-rules" element={<RequireAuth allowedRoles={["admin"]}><PriceRulesPage /></RequireAuth>} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/users" element={<RequireAuth allowedRoles={["admin"]}><UsersPage /></RequireAuth>} />
           <Route path="/messages" element={<RequireAuth allowedRoles={["admin"]}><ContactMessagesPage /></RequireAuth>} />
           <Route path="/suppliers" element={<RequireAuth allowedRoles={["admin", "inventory_manager"]}><SuppliersPage /></RequireAuth>} />
