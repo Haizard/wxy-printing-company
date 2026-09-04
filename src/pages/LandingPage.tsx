@@ -282,8 +282,9 @@ export default function LandingPage() {
             >
               <Link to="/products" className="block h-full">
                 <div className="relative h-full min-h-[400px] lg:min-h-[460px] rounded-[var(--radius-lg)] overflow-hidden group cursor-pointer">
-                  {/* Background gradient overlay */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${FAMILIES[0].gradient} opacity-90`} />
+                  {/* Background image */}
+                  {FAMILIES[0].image && <img src={FAMILIES[0].image} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                  <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/70" />
                   {/* Decorative pattern */}
                   <div className="absolute inset-0 opacity-10">
                     <div className="absolute top-8 right-8 w-40 h-40 border-2 border-white rounded-full" />
@@ -337,8 +338,9 @@ export default function LandingPage() {
                 >
                   <Link to="/products" className="block h-full">
                     <div className="relative h-full rounded-[var(--radius-lg)] overflow-hidden group cursor-pointer min-h-[130px]">
-                      {/* Background gradient overlay */}
-                      <div className={`absolute inset-0 bg-gradient-to-r ${family.gradient} opacity-90`} />
+                      {/* Background image */}
+                      {family.image && <img src={family.image} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/60" />
                       {/* Content */}
                       <div className="relative z-10 h-full flex items-center gap-6 p-6 text-white">
                         <div className="w-16 h-16 rounded-[var(--radius-md)] bg-white/15 backdrop-blur-sm flex items-center justify-center flex-shrink-0">

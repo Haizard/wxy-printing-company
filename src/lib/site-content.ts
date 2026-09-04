@@ -68,6 +68,7 @@ export interface ServiceFamily {
   tagline: string;
   description: string;
   gradient: string;
+  image?: string;
   groups: ServiceGroup[];
 }
 
@@ -77,6 +78,7 @@ export const FAMILIES: ServiceFamily[] = [
     id: "signage",
     num: "01",
     title: "Signage & Visual Communication",
+    image: "/divisions/signage.jpg",
     icon: Lightbulb,
     tagline:
       "Where visibility meets impact — your brand deserves to be seen, remembered and respected.",
@@ -116,6 +118,7 @@ export const FAMILIES: ServiceFamily[] = [
     id: "fabrication",
     num: "02",
     title: "Fabrication & Structural Branding",
+    image: "/divisions/fabrication.jpg",
     icon: Building2,
     tagline:
       "Built strong. Designed bold. We combine engineering precision with branding excellence to create structures that stand out and stand the test of time.",
@@ -166,6 +169,7 @@ export const FAMILIES: ServiceFamily[] = [
     id: "promotional",
     num: "03",
     title: "Promotional Materials",
+    image: "/divisions/promotional.png",
     icon: Gift,
     tagline:
       "Tangible branding that travels, connects and converts everyday items into powerful marketing tools.",
@@ -203,6 +207,7 @@ export const FAMILIES: ServiceFamily[] = [
     id: "printing",
     num: "04",
     title: "Printing & Production",
+    image: "/divisions/printing.jpeg",
     icon: Printer,
     tagline:
       "Where technology meets craftsmanship for flawless results, every time.",
