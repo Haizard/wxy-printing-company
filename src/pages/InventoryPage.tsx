@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Package, Plus, Pencil, Trash2, ArrowDown, ArrowUp, Minus, AlertTriangle, BarChart3, TrendingDown, Recycle, Eye, Filter, LayoutGrid, List, Image } from "lucide-react";
+import { Package, Plus, Pencil, Trash2, ArrowDown, ArrowUp, Minus, AlertTriangle, BarChart3, TrendingDown, Recycle, Eye, Filter, LayoutGrid, List, Image, FileSpreadsheet, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInventory } from "@/hooks/useApi";
 import { formatTZS } from "@/lib/utils";
+import { generatePDF, generateExcel, generateCSV, formatDate } from "@/lib/export-utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -189,16 +190,36 @@ export default function InventoryPage() {
             <h1 className="text-title-1 font-bold">Inventory</h1>
             <p className="text-body text-[var(--text-secondary)] mt-1">Materials & consumables management</p>
           </div>
-          {canEdit && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => {
+              const inv = items || [];
+              generateCSV({
+                filename: `wxy-inventory-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Material", accessor: "name" },
+                  { header: "Category", accessor: (r: any) => r.category || "general" },
+                  { header: "Unit", accessor: "unit" },
+                  { header: "Qty", accessor: (r: any) => r.currentQty },
+                  { header: "Reorder", accessor: (r: any) => r.reorderLevel },
+                  { header: "Unit Cost", accessor: "unitCost" },
+                  { header: "Value", accessor: (r: any) => (r.unitCost || 0) * parseFloat(r.currentQty) },
+                ],
+                data: inv,
+              });
+            }}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
+            </Button>
+            {canEdit && (
               <Button size="sm" variant="outline" onClick={() => { setCatDialogOpen(true); setEditingCat(null); setCatForm({ name: "", value: "", color: "", icon: "", sortOrder: 0 }); }}>
                 <Pencil className="w-4 h-4 mr-1" /> Manage Categories
               </Button>
+            )}
+            {canEdit && (
               <Button size="sm" onClick={openCreateItem}>
                 <Plus className="w-4 h-4 mr-1" /> Add Material
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </motion.div>
 

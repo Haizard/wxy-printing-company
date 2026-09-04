@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FileText, Send, Check, X, ArrowRight, Trash2 } from "lucide-react";
+import { FileText, Send, Check, X, ArrowRight, Trash2, FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatTZS } from "@/lib/utils";
+import { generatePDF, generateCSV, formatDate } from "@/lib/export-utils";
 import { useQuotes, useJobs } from "@/hooks/useApi";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -100,10 +101,50 @@ export default function QuotesPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Quotes</h1>
-        <p className="text-body text-[var(--text-secondary)] mt-1">
-          Manage and track your quotes
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Quotes</h1>
+            <p className="text-body text-[var(--text-secondary)] mt-1">
+              Manage and track your quotes
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => {
+              const quotesData = quotes || [];
+              generateCSV({
+                filename: `wxy-quotes-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Quote #", accessor: "quoteNumber" },
+                  { header: "Customer", accessor: (r: any) => r.customerName || "—" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Total", accessor: "total" },
+                  { header: "Date", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: quotesData,
+              });
+            }}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => {
+              const quotesData = quotes || [];
+              generatePDF({
+                title: "Quotes Report",
+                subtitle: `${quotesData.length} total quotes`,
+                filename: `wxy-quotes-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Quote #", accessor: "quoteNumber" },
+                  { header: "Customer", accessor: (r: any) => r.customerName || "—" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Total", accessor: (r: any) => formatTZS(r.total || 0) },
+                  { header: "Date", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: quotesData,
+              });
+            }}>
+              <FileText className="w-4 h-4 mr-1" /> PDF
+            </Button>
+          </div>
+        </div>
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

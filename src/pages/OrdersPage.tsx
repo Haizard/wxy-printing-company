@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, CreditCard, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ShoppingCart, CreditCard, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Trash2, FileSpreadsheet, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTZS } from "@/lib/utils";
+import { generatePDF, generateCSV, formatDate } from "@/lib/export-utils";
 import { useOrders } from "@/hooks/useApi";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -84,10 +85,50 @@ export default function OrdersPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Orders</h1>
-        <p className="text-body text-[var(--text-secondary)] mt-1">
-          Track customer orders and payments
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Orders</h1>
+            <p className="text-body text-[var(--text-secondary)] mt-1">
+              Track customer orders and payments
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => {
+              const ordersData = orders || [];
+              generateCSV({
+                filename: `wxy-orders-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Order #", accessor: "orderNumber" },
+                  { header: "Customer", accessor: (r: any) => r.customerName || "—" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Total", accessor: "total" },
+                  { header: "Date", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: ordersData,
+              });
+            }}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => {
+              const ordersData = orders || [];
+              generatePDF({
+                title: "Orders Report",
+                subtitle: `${ordersData.length} total orders`,
+                filename: `wxy-orders-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Order #", accessor: "orderNumber" },
+                  { header: "Customer", accessor: (r: any) => r.customerName || "—" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Total", accessor: (r: any) => formatTZS(r.total || 0) },
+                  { header: "Date", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: ordersData,
+              });
+            }}>
+              <FileText className="w-4 h-4 mr-1" /> PDF
+            </Button>
+          </div>
+        </div>
       </motion.div>
 
       {loading ? (

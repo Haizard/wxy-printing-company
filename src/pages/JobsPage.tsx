@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus, Package } from "lucide-react";
+import { ClipboardList, Clock, User, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, FileText, Upload, X, History, Trash2, Plus, Package, FileSpreadsheet } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useJobs } from "@/hooks/useApi";
 import { useToast } from "@/components/ui/use-toast";
 import { compressImageFile, readFileAsBase64 } from "@/lib/image-utils";
+import { generatePDF, generateCSV, formatDate } from "@/lib/export-utils";
 
 type JobStatus = "confirmed" | "in_production" | "qa" | "ready" | "delivered";
 
@@ -650,11 +651,47 @@ export default function JobsPage() {
               Track and manage your production jobs
             </p>
           </div>
-          {canCreateDelete && (
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" /> New Job
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => {
+              const jobsData = jobs || [];
+              generateCSV({
+                filename: `wxy-jobs-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Job #", accessor: "jobNumber" },
+                  { header: "Title", accessor: "title" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Priority", accessor: (r: any) => r.priority || "normal" },
+                  { header: "Created", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: jobsData,
+              });
+            }}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
             </Button>
-          )}
+            <Button size="sm" variant="outline" onClick={() => {
+              const jobsData = jobs || [];
+              generatePDF({
+                title: "Jobs Report",
+                subtitle: `${jobsData.length} total jobs`,
+                filename: `wxy-jobs-${new Date().toISOString().split("T")[0]}`,
+                columns: [
+                  { header: "Job #", accessor: "jobNumber" },
+                  { header: "Title", accessor: "title" },
+                  { header: "Status", accessor: "status" },
+                  { header: "Priority", accessor: (r: any) => r.priority || "normal" },
+                  { header: "Created", accessor: (r: any) => formatDate(r.createdAt) },
+                ],
+                data: jobsData,
+              });
+            }}>
+              <FileText className="w-4 h-4 mr-1" /> PDF
+            </Button>
+            {canCreateDelete && (
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" /> New Job
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
 

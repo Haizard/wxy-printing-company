@@ -148,3 +148,7 @@ export function useCalculatePrice() {
     { productId?: string; categoryId?: string; inputs: any }
   >("/api/calculator/quote");
 }
+
+export function usePurchaseOrders() {
+  return useFetch<any[]>("/api/purchase-orders");
+}

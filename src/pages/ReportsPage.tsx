@@ -36,10 +36,11 @@ import {
   useInventory,
   useProducts,
   useCategories,
+  usePurchaseOrders,
 } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
 
-type TabId = "overview" | "sales" | "production" | "inventory" | "financial";
+type TabId = "overview" | "sales" | "production" | "inventory" | "financial" | "purchasing";
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "overview", label: "Overview", icon: BarChart3 },
@@ -47,6 +48,7 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "production", label: "Production", icon: Factory },
   { id: "inventory", label: "Inventory", icon: Package },
   { id: "financial", label: "Financial", icon: DollarSign },
+  { id: "purchasing", label: "Purchasing", icon: Truck },
 ];
 
 export default function ReportsPage() {
@@ -62,8 +64,12 @@ export default function ReportsPage() {
   const { data: inventory } = useInventory();
   const { data: products } = useProducts();
   const { data: categories } = useCategories();
+  const { data: purchaseOrders } = usePurchaseOrders();
 
   const isAdmin = user?.role === "admin";
+
+  // ── Drill-down State ─────────────────────────────────────────────────
+  const [drillDown, setDrillDown] = useState<{ type: string; data: any[]; title: string } | null>(null);
 
   // ── Date Filtering ────────────────────────────────────────────────────
   const filteredData = useMemo(() => {
@@ -85,8 +91,9 @@ export default function ReportsPage() {
       jobs: filterByDate(jobs || [], "createdAt"),
       quotes: filterByDate(quotes || [], "createdAt"),
       inventory: inventory || [],
+      purchaseOrders: filterByDate(purchaseOrders || [], "createdAt"),
     };
-  }, [orders, jobs, quotes, inventory, dateFrom, dateTo]);
+  }, [orders, jobs, quotes, inventory, purchaseOrders, dateFrom, dateTo]);
 
   // ── Computed Stats ────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -140,6 +147,36 @@ export default function ReportsPage() {
     // Products
     const totalProducts = products?.length || 0;
 
+    // Revenue by category (match order line items to products -> categories)
+    const revenueByCategory: Record<string, number> = {};
+    fo.forEach((o: any) => {
+      // If order has items with product/category info, use that
+      if (o.items && Array.isArray(o.items)) {
+        o.items.forEach((item: any) => {
+          const cat = item.categoryName || item.category || "Uncategorized";
+          revenueByCategory[cat] = (revenueByCategory[cat] || 0) + (item.total || item.subtotal || 0);
+        });
+      } else if (o.categoryName || o.category) {
+        const cat = o.categoryName || o.category;
+        revenueByCategory[cat] = (revenueByCategory[cat] || 0) + (o.total || 0);
+      } else {
+        revenueByCategory["Uncategorized"] = (revenueByCategory["Uncategorized"] || 0) + (o.total || 0);
+      }
+    });
+
+    // Purchase Orders
+    const { purchaseOrders: fpo } = filteredData;
+    const totalPOValue = fpo.reduce((s: number, po: any) => s + (po.total || 0), 0);
+    const poByStatus = {
+      draft: fpo.filter((po: any) => po.status === "draft").length,
+      ordered: fpo.filter((po: any) => po.status === "ordered").length,
+      received: fpo.filter((po: any) => po.status === "received").length,
+      cancelled: fpo.filter((po: any) => po.status === "cancelled").length,
+    };
+    const pendingPOValue = fpo
+      .filter((po: any) => po.status === "ordered")
+      .reduce((s: number, po: any) => s + (po.total || 0), 0);
+
     return {
       totalRevenue,
       paidRevenue,
@@ -161,8 +198,42 @@ export default function ReportsPage() {
       categoriesCount,
       inventoryByCategory,
       totalProducts,
+      revenueByCategory,
+      totalPOValue,
+      poByStatus,
+      pendingPOValue,
+      totalPOs: fpo.length,
     };
   }, [filteredData, categories, products]);
+
+  // ── Drill-down Handlers ──────────────────────────────────────────────
+  const handleDrillDown = (type: string) => {
+    switch (type) {
+      case "totalRevenue":
+        setDrillDown({ type, data: filteredData.orders, title: "All Orders" });
+        break;
+      case "paidRevenue":
+        setDrillDown({ type, data: filteredData.orders.filter((o: any) => o.status === "paid"), title: "Paid Orders" });
+        break;
+      case "pendingRevenue":
+        setDrillDown({ type, data: filteredData.orders.filter((o: any) => o.status === "pending"), title: "Pending Orders" });
+        break;
+      case "totalJobs":
+        setDrillDown({ type, data: filteredData.jobs, title: "All Jobs" });
+        break;
+      case "lowStock":
+        setDrillDown({ type, data: filteredData.inventory.filter((i: any) => parseFloat(i.currentQty) < parseFloat(i.reorderLevel)), title: "Low Stock Items" });
+        break;
+      case "outOfStock":
+        setDrillDown({ type, data: filteredData.inventory.filter((i: any) => parseFloat(i.currentQty) === 0), title: "Out of Stock Items" });
+        break;
+      case "totalPOs":
+        setDrillDown({ type, data: filteredData.purchaseOrders, title: "All Purchase Orders" });
+        break;
+      default:
+        break;
+    }
+  };
 
   // ── Export Handlers ───────────────────────────────────────────────────
   const handleExportPDF = (tab: TabId) => {
@@ -359,7 +430,7 @@ export default function ReportsPage() {
   const handleExportCSV = (tab: TabId) => {
     const dateLabel = dateFrom || dateTo ? ` (${dateFrom || "start"} to ${dateTo || "now"})` : " (All Time)";
 
-    if (tab === "orders" || tab === "sales") {
+    if (tab === "sales") {
       generateCSV({
         filename: `wxy-orders-${new Date().toISOString().split("T")[0]}`,
         columns: [
@@ -371,7 +442,7 @@ export default function ReportsPage() {
         ],
         data: filteredData.orders,
       });
-    } else if (tab === "jobs" || tab === "production") {
+    } else if (tab === "production") {
       generateCSV({
         filename: `wxy-jobs-${new Date().toISOString().split("T")[0]}`,
         columns: [
@@ -397,6 +468,18 @@ export default function ReportsPage() {
         ],
         data: filteredData.inventory,
       });
+    } else if (tab === "purchasing") {
+      generateCSV({
+        filename: `wxy-purchase-orders-${new Date().toISOString().split("T")[0]}`,
+        columns: [
+          { header: "PO #", accessor: "orderNumber" },
+          { header: "Supplier", accessor: (r: any) => r.supplierName || "—" },
+          { header: "Status", accessor: "status" },
+          { header: "Total", accessor: "total" },
+          { header: "Date", accessor: (r: any) => formatDate(r.createdAt) },
+        ],
+        data: filteredData.purchaseOrders,
+      });
     }
   };
 
@@ -415,6 +498,7 @@ export default function ReportsPage() {
           bg="bg-[rgba(52,199,89,0.1)]"
           trend={stats.totalOrders > 0 ? "+12%" : undefined}
           trendUp={true}
+          onClick={() => handleDrillDown("totalRevenue")}
         />
         <StatCard
           title="Paid Revenue"
@@ -423,6 +507,7 @@ export default function ReportsPage() {
           icon={TrendingUp}
           color="text-[var(--accent-tertiary)]"
           bg="bg-[rgba(46,125,255,0.1)]"
+          onClick={() => handleDrillDown("paidRevenue")}
         />
         <StatCard
           title="Outstanding"
@@ -431,6 +516,7 @@ export default function ReportsPage() {
           icon={AlertTriangle}
           color="text-[var(--accent-warning)]"
           bg="bg-[rgba(255,159,10,0.1)]"
+          onClick={() => handleDrillDown("pendingRevenue")}
         />
         <StatCard
           title="Conversion Rate"
@@ -450,6 +536,7 @@ export default function ReportsPage() {
           icon={ClipboardList}
           color="text-[var(--accent-primary)]"
           bg="bg-[rgba(255,90,60,0.1)]"
+          onClick={() => handleDrillDown("totalJobs")}
         />
         <StatCard
           title="Avg Order Value"
@@ -721,7 +808,7 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Items" value={String(stats.totalItems)} icon={Package} color="text-[var(--accent-primary)]" bg="bg-[rgba(255,90,60,0.1)]" />
-        <StatCard title="Low Stock" value={String(stats.lowStockItems)} icon={AlertTriangle} color={stats.lowStockItems > 0 ? "text-[var(--accent-warning)]" : "text-[var(--accent-success)]"} bg={stats.lowStockItems > 0 ? "bg-[rgba(255,159,10,0.1)]" : "bg-[rgba(52,199,89,0.1)]"} />
+        <StatCard title="Low Stock" value={String(stats.lowStockItems)} icon={AlertTriangle} color={stats.lowStockItems > 0 ? "text-[var(--accent-warning)]" : "text-[var(--accent-success)]"} bg={stats.lowStockItems > 0 ? "bg-[rgba(255,159,10,0.1)]" : "bg-[rgba(52,199,89,0.1)]"} onClick={() => handleDrillDown("lowStock")} />
         <StatCard title="Out of Stock" value={String(stats.outOfStock)} icon={AlertTriangle} color={stats.outOfStock > 0 ? "text-[var(--accent-danger)]" : "text-[var(--accent-success)]"} bg={stats.outOfStock > 0 ? "bg-[rgba(255,59,48,0.1)]" : "bg-[rgba(52,199,89,0.1)]"} />
         <StatCard title="Stock Value" value={formatTZS(stats.totalStockValue)} icon={DollarSign} color="text-[var(--accent-success)]" bg="bg-[rgba(52,199,89,0.1)]" />
       </div>
@@ -826,6 +913,33 @@ export default function ReportsPage() {
         <StatCard title="Avg Order Value" value={formatTZS(stats.avgOrderValue)} subtitle={`${stats.totalOrders} orders`} icon={BarChart3} color="text-[var(--accent-tertiary)]" bg="bg-[rgba(46,125,255,0.1)]" />
       </div>
 
+      {/* Revenue by Category */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Revenue by Category</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(stats.revenueByCategory)
+              .sort(([, a], [, b]) => b - a)
+              .map(([cat, revenue]) => (
+                <div key={cat} className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+                  <div>
+                    <p className="text-subhead font-medium capitalize">{cat}</p>
+                    <p className="text-caption text-[var(--text-tertiary)]">{formatTZS(revenue)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-caption font-semibold">{stats.totalRevenue > 0 ? Math.round((revenue / stats.totalRevenue) * 100) : 0}%</p>
+                  </div>
+                </div>
+              ))}
+            {Object.keys(stats.revenueByCategory).length === 0 && (
+              <p className="col-span-full text-center text-[var(--text-tertiary)] py-4">No revenue data available.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Financial Summary Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -860,8 +974,190 @@ export default function ReportsPage() {
     </div>
   );
 
+  const renderPurchasing = () => (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Total POs" value={String(stats.totalPOs)} icon={Truck} color="text-[var(--accent-primary)]" bg="bg-[rgba(255,90,60,0.1)]" />
+        <StatCard title="Total Spend" value={formatTZS(stats.totalPOValue)} subtitle={`${stats.totalPOs} orders`} icon={DollarSign} color="text-[var(--accent-secondary)]" bg="bg-[rgba(255,176,32,0.1)]" />
+        <StatCard title="Pending Receipt" value={formatTZS(stats.pendingPOValue)} subtitle={`${stats.poByStatus.ordered} orders`} icon={AlertTriangle} color="text-[var(--accent-warning)]" bg="bg-[rgba(255,159,10,0.1)]" />
+        <StatCard title="Received" value={String(stats.poByStatus.received)} subtitle={`${stats.poByStatus.received} of ${stats.totalPOs}`} icon={Package} color="text-[var(--accent-success)]" bg="bg-[rgba(52,199,89,0.1)]" />
+      </div>
+
+      {/* PO Status Breakdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Purchase Order Status</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Object.entries(stats.poByStatus).map(([status, count]) => {
+            const total = stats.totalPOs || 1;
+            const pct = Math.round((count / total) * 100);
+            const colors: Record<string, string> = {
+              draft: "bg-[var(--text-tertiary)]",
+              ordered: "bg-[var(--accent-warning)]",
+              received: "bg-[var(--accent-success)]",
+              cancelled: "bg-[var(--accent-danger)]",
+            };
+            const labels: Record<string, string> = {
+              draft: "Draft",
+              ordered: "Ordered",
+              received: "Received",
+              cancelled: "Cancelled",
+            };
+            return (
+              <div key={status}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-subhead">{labels[status]}</span>
+                  <span className="text-caption font-semibold">{count}</span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--glass-fill-subtle)] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${colors[status]} transition-all duration-500`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Purchase Orders Table */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Purchase Orders ({filteredData.purchaseOrders.length})</CardTitle>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleExportCSV("purchasing")}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredData.purchaseOrders.length === 0 ? (
+            <p className="text-center text-[var(--text-tertiary)] py-8">No purchase orders found for the selected period.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--glass-border)]">
+                    <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">PO #</th>
+                    <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Supplier</th>
+                    <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Status</th>
+                    <th className="text-right py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Total</th>
+                    <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.purchaseOrders.slice(0, 50).map((po: any) => (
+                    <tr key={po.id} className="border-b border-[rgba(0,0,0,0.04)] hover:bg-[var(--glass-fill-subtle)]">
+                      <td className="py-3 px-2 font-medium">{po.orderNumber}</td>
+                      <td className="py-3 px-2 text-[var(--text-secondary)]">{po.supplierName || "—"}</td>
+                      <td className="py-3 px-2">
+                        <Badge variant={
+                          po.status === "received" ? "default" :
+                          po.status === "cancelled" ? "secondary" : "outline"
+                        } className={
+                          po.status === "received" ? "bg-[rgba(52,199,89,0.15)] text-[var(--accent-success)]" :
+                          po.status === "ordered" ? "bg-[rgba(255,159,10,0.15)] text-[var(--accent-warning)]" :
+                          po.status === "cancelled" ? "bg-[rgba(255,59,48,0.15)] text-[var(--accent-danger)]" :
+                          ""
+                        }>{po.status}</Badge>
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold">{formatTZS(po.total || 0)}</td>
+                      <td className="py-3 px-2 text-[var(--text-secondary)]">{formatDate(po.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {/* Drill-down Panel */}
+      {drillDown && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>{drillDown.title} ({drillDown.data.length})</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setDrillDown(null)}>
+                ✕ Close
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--glass-border)]">
+                      {drillDown.type.includes("Order") || drillDown.type === "totalRevenue" || drillDown.type === "paidRevenue" || drillDown.type === "pendingRevenue" ? (
+                        <>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Order #</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Customer</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Status</th>
+                          <th className="text-right py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Total</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Date</th>
+                        </>
+                      ) : drillDown.type.includes("Job") ? (
+                        <>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Job #</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Title</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Status</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Created</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Name</th>
+                          <th className="text-left py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Category</th>
+                          <th className="text-right py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Qty</th>
+                          <th className="text-right py-3 px-2 text-caption font-semibold text-[var(--text-secondary)]">Value</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillDown.data.slice(0, 100).map((item: any) => (
+                      <tr key={item.id} className="border-b border-[rgba(0,0,0,0.04)] hover:bg-[var(--glass-fill-subtle)]">
+                        {drillDown.type.includes("Order") || drillDown.type === "totalRevenue" || drillDown.type === "paidRevenue" || drillDown.type === "pendingRevenue" ? (
+                          <>
+                            <td className="py-3 px-2 font-medium">{item.orderNumber}</td>
+                            <td className="py-3 px-2 text-[var(--text-secondary)]">{item.customerName || "—"}</td>
+                            <td className="py-3 px-2"><Badge variant="outline">{item.status}</Badge></td>
+                            <td className="py-3 px-2 text-right font-semibold">{formatTZS(item.total || 0)}</td>
+                            <td className="py-3 px-2 text-[var(--text-secondary)]">{formatDate(item.createdAt)}</td>
+                          </>
+                        ) : drillDown.type.includes("Job") ? (
+                          <>
+                            <td className="py-3 px-2 font-medium">{item.jobNumber}</td>
+                            <td className="py-3 px-2 text-[var(--text-secondary)]">{item.title}</td>
+                            <td className="py-3 px-2"><Badge variant="outline">{item.status?.replace("_", " ")}</Badge></td>
+                            <td className="py-3 px-2 text-[var(--text-secondary)]">{formatDate(item.createdAt)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-3 px-2 font-medium">{item.name}</td>
+                            <td className="py-3 px-2 text-[var(--text-secondary)] capitalize">{item.category || "general"}</td>
+                            <td className="py-3 px-2 text-right">{item.currentQty} {item.unit}</td>
+                            <td className="py-3 px-2 text-right font-semibold">{formatTZS((item.unitCost || 0) * parseFloat(item.currentQty))}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -964,6 +1260,7 @@ export default function ReportsPage() {
           {activeTab === "production" && renderProduction()}
           {activeTab === "inventory" && renderInventory()}
           {activeTab === "financial" && renderFinancial()}
+          {activeTab === "purchasing" && renderPurchasing()}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -981,6 +1278,7 @@ function StatCard({
   bg,
   trend,
   trendUp,
+  onClick,
 }: {
   title: string;
   value: string;
@@ -990,9 +1288,13 @@ function StatCard({
   bg: string;
   trend?: string;
   trendUp?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card>
+    <Card
+      className={onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+      onClick={onClick}
+    >
       <CardContent className="flex items-start justify-between">
         <div>
           <p className="text-caption text-[var(--text-secondary)]">{title}</p>
