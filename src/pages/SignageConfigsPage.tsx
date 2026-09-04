@@ -40,10 +40,10 @@ export default function SignageConfigsPage() {
     setLoading(true);
     try {
       const [cfgsRes, prodsRes, matsRes, catsRes] = await Promise.all([
-        fetch("/api/signage-configs"),
+        fetch("/api/signage-configs", { headers: getHeaders() }),
         fetch("/api/products"),
-        fetch("/api/signage-materials"),
-        fetch("/api/signage-material-categories"),
+        fetch("/api/signage-materials", { headers: getHeaders() }),
+        fetch("/api/signage-material-categories", { headers: getHeaders() }),
       ]);
       if (cfgsRes.ok) setConfigs(await cfgsRes.json());
       if (prodsRes.ok) setProducts(await prodsRes.json());

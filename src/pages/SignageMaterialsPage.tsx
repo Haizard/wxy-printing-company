@@ -40,8 +40,8 @@ export default function SignageMaterialsPage() {
     setLoading(true);
     try {
       const [catsRes, matsRes] = await Promise.all([
-        fetch("/api/signage-material-categories"),
-        fetch("/api/signage-materials"),
+        fetch("/api/signage-material-categories", { headers: getHeaders() }),
+        fetch("/api/signage-materials", { headers: getHeaders() }),
       ]);
       if (catsRes.ok) setCategories(await catsRes.json());
       if (matsRes.ok) setMaterials(await matsRes.json());
