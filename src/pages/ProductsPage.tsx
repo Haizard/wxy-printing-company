@@ -647,7 +647,7 @@ export default function ProductsPage() {
                           </span>
                         </button>
 
-                        <CardContent className="p-4 flex flex-col flex-1">
+                        <CardContent className="p-4 flex flex-col flex-1 min-h-0 overflow-hidden">
                           <p className="text-[10px] uppercase tracking-wide font-semibold text-[var(--text-tertiary)] mb-1">
                             {catById[product.categoryId]?.name || "Products"}
                           </p>
@@ -656,7 +656,7 @@ export default function ProductsPage() {
                             onClick={() => setSelected(product)}
                             className="text-left"
                           >
-                            <h3 className="text-headline font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                            <h3 className="text-headline font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors truncate">
                               {product.name}
                             </h3>
                           </button>
@@ -685,7 +685,7 @@ export default function ProductsPage() {
                             )}
                           </div>
 
-                          <div className="flex gap-2 mt-4 pt-3 border-t border-[rgba(60,60,67,0.1)] mt-auto">
+                          <div className="flex gap-2 mt-4 pt-3 border-t border-[rgba(60,60,67,0.1)] mt-auto flex-shrink-0">
                             <Button
                               size="sm"
                               variant="outline"
@@ -700,7 +700,7 @@ export default function ProductsPage() {
                               onClick={() => requestOrderFor(product)}
                             >
                               <ShoppingCart className="w-4 h-4 mr-1" />
-                              {user ? "Request Order" : "Request & Order"}
+                              Request
                             </Button>
                           </div>
                         </CardContent>
