@@ -119,7 +119,7 @@ export default function SignageMaterialsPage() {
           <div>
             <h1 className="text-title-1 font-bold text-[var(--text-primary)]">Signage Materials</h1>
             <p className="text-body text-[var(--text-secondary)] mt-1">
-              Manage materials, pricing, and categories for signage products
+              Manage materials and pricing for any product (signs, banners, cards, and more)
             </p>
           </div>
           {isAdmin && (

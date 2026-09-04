@@ -80,6 +80,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: "/reports", icon: BarChart3, label: "Reports", allowedRoles: ["admin", "sales"] },
       { to: "/price-rules", icon: DollarSign, label: "Price Rules", allowedRoles: ["admin"] },
+      { to: "/signage-configs", icon: Settings, label: "Signage Configs", allowedRoles: ["admin"] },
       { to: "/signage-materials", icon: Package, label: "Signage Materials", allowedRoles: ["admin"] },
     ],
   },

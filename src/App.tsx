@@ -16,6 +16,7 @@ import InventoryPage from "@/pages/InventoryPage";
 import ChatPage from "@/pages/ChatPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SignageMaterialsPage from "@/pages/SignageMaterialsPage";
+import SignageConfigsPage from "@/pages/SignageConfigsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import CartPage from "@/pages/CartPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/inventory" element={<RequireAuth allowedRoles={["admin", "inventory_manager", "production"]}><InventoryPage /></RequireAuth>} />
           <Route path="/chat" element={<ChatPage />} />
           
+            <Route path="/signage-configs" element={<RequireAuth allowedRoles={["admin"]}><SignageConfigsPage /></RequireAuth>} />
             <Route path="/signage-materials" element={<RequireAuth allowedRoles={["admin"]}><SignageMaterialsPage /></RequireAuth>} />
 <Route path="/reports" element={<RequireAuth allowedRoles={["admin", "sales"]}><ReportsPage /></RequireAuth>} />
           <Route path="/price-rules" element={<RequireAuth allowedRoles={["admin"]}><PriceRulesPage /></RequireAuth>} />

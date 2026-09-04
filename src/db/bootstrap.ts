@@ -311,6 +311,10 @@ const TABLE_DDL: string[] = [
     status text not null default 'new',
     created_at timestamp default now()
   )`,
+  `CREATE TABLE IF NOT EXISTS signage_material_categories (id uuid primary key default gen_random_uuid(), name text not null, slug text not null unique, description text, sort_order integer default 0, is_active boolean default true, created_at timestamp default now())`,
+  `CREATE TABLE IF NOT EXISTS signage_materials (id uuid primary key default gen_random_uuid(), category_id uuid not null references signage_material_categories(id), name text not null, slug text not null unique, description text, unit text not null, price_per_unit integer not null, cost_per_unit integer, min_order_qty numeric default 1, lead_time_days integer, supplier text, image_url text, is_active boolean default true, created_at timestamp default now())`,
+  `CREATE TABLE IF NOT EXISTS signage_product_configs (id uuid primary key default gen_random_uuid(), product_id uuid not null references products(id), name text not null, description text, is_active boolean default true, created_at timestamp default now())`,
+  `CREATE TABLE IF NOT EXISTS signage_config_materials (id uuid primary key default gen_random_uuid(), config_id uuid not null references signage_product_configs(id), material_id uuid not null references signage_materials(id), is_required boolean default true, default_value numeric, max_value numeric, sort_order integer default 0)`,
 ];
 
 // ── Additive columns (safe ALTER TABLE … ADD COLUMN IF NOT EXISTS) ──────────
@@ -326,53 +330,7 @@ const ADDITIVE_COLUMNS: string[] = [
   `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS waste_reason text; EXCEPTION WHEN duplicate_column THEN null; END $$`,
 
   // inventory_movements: approved_by column
-  `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES users(id);,
-
-  CREATE TABLE IF NOT EXISTS signage_material_categories (
-    id uuid primary key default gen_random_uuid(),
-    name text not null,
-    slug text not null unique,
-    description text,
-    sort_order integer default 0,
-    is_active boolean default true,
-    created_at timestamp default now()
-  ),
-
-  CREATE TABLE IF NOT EXISTS signage_materials (
-    id uuid primary key default gen_random_uuid(),
-    category_id uuid not null references signage_material_categories(id),
-    name text not null,
-    slug text not null unique,
-    description text,
-    unit text not null,
-    price_per_unit integer not null,
-    cost_per_unit integer,
-    min_order_qty numeric default '1',
-    lead_time_days integer,
-    supplier text,
-    image_url text,
-    is_active boolean default true,
-    created_at timestamp default now()
-  ),
-
-  CREATE TABLE IF NOT EXISTS signage_product_configs (
-    id uuid primary key default gen_random_uuid(),
-    product_id uuid not null references products(id),
-    name text not null,
-    description text,
-    is_active boolean default true,
-    created_at timestamp default now()
-  ),
-
-  CREATE TABLE IF NOT EXISTS signage_config_materials (
-    id uuid primary key default gen_random_uuid(),
-    config_id uuid not null references signage_product_configs(id),
-    material_id uuid not null references signage_materials(id),
-    is_required boolean default true,
-    default_value numeric,
-    max_value numeric,
-    sort_order integer default 0
-  ) EXCEPTION WHEN duplicate_column THEN null; END $$`,
+  `DO $$ BEGIN ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES users(id); EXCEPTION WHEN duplicate_column THEN null; END $$`,
 
   // inventory_items: image_url column
   `DO $$ BEGIN ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS image_url text; EXCEPTION WHEN duplicate_column THEN null; END $$`,
@@ -411,11 +369,11 @@ const INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS job_status_history_job_idx ON job_status_history(job_id)`,
   `CREATE INDEX IF NOT EXISTS job_files_job_idx ON job_files(job_id)`,
   `CREATE INDEX IF NOT EXISTS chat_threads_job_idx ON chat_threads(job_id)`,
-  `,
-  CREATE INDEX IF NOT EXISTS signage_materials_category_idx ON signage_materials(category_id),
-  CREATE INDEX IF NOT EXISTS signage_product_configs_product_idx ON signage_product_configs(product_id),
-  CREATE INDEX IF NOT EXISTS signage_config_materials_config_idx ON signage_config_materials(config_id),
-  CREATE INDEX IF NOT EXISTS signage_config_materials_material_idx ON signage_config_materials(material_id)CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON chat_messages(thread_id)`,
+  `CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON chat_messages(thread_id)` ,
+  `CREATE INDEX IF NOT EXISTS signage_materials_category_idx ON signage_materials(category_id)` ,
+  `CREATE INDEX IF NOT EXISTS signage_product_configs_product_idx ON signage_product_configs(product_id)` ,
+  `CREATE INDEX IF NOT EXISTS signage_config_materials_config_idx ON signage_config_materials(config_id)` ,
+  `CREATE INDEX IF NOT EXISTS signage_config_materials_material_idx ON signage_config_materials(material_id)`
 ];
 
 // ── Execute ─────────────────────────────────────────────────────────────────

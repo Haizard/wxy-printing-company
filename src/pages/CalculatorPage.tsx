@@ -104,6 +104,8 @@ export default function CalculatorPage() {
   const [size, setSize] = useState("");
   const [selectedFinishing, setSelectedFinishing] = useState<string[]>([]);
   const [productOptions, setProductOptions] = useState<any[]>([]);
+  const [signageConfig, setSignageConfig] = useState<any>(null);
+  const [materialQuantities, setMaterialQuantities] = useState<Record<string, number>>({});
   const [dbFinishingOptions, setDbFinishingOptions] = useState<any[]>([]);
   const [optionValues, setOptionValues] = useState<Record<string, any[]>>({});
 
@@ -117,13 +119,16 @@ export default function CalculatorPage() {
 
   // Fetch product options and finishing options from DB when product is selected
   useEffect(() => {
-    if (!selectedProductId) return;
+    if (!selectedProductId) { setSignageConfig(null); setMaterialQuantities({}); return; }
     const fetchOptions = async () => {
       try {
         const [optsRes, finRes] = await Promise.all([
           fetch(`/api/products/${selectedProductId}/options`),
           fetch(`/api/products/${selectedProductId}/finishing`),
         ]);
+        const signRes = await fetch(`/api/signage-configs/by-product/${selectedProductId}`);
+        if (signRes.ok) { const cfg = await signRes.json(); setSignageConfig(cfg); if(cfg){const q:Record<string,number>={};cfg.materials.forEach((m:any)=>{q[m.materialId]=parseFloat(m.defaultValue)||1});setMaterialQuantities(q);} }
+        else setSignageConfig(null);
         if (optsRes.ok) {
           const opts = await optsRes.json();
           setProductOptions(opts);
@@ -223,7 +228,7 @@ export default function CalculatorPage() {
             quantity: data.quantity || quantity,
             subtotal: data.subtotal,
             finishingTotal,
-            total: (data.subtotal || 0) + finishingTotal,
+            total: (data.subtotal || 0) + finishingTotal + (signageConfig ? signageConfig.materials.reduce((sum: number, m: any) => sum + (m.pricePerUnit || 0) * (materialQuantities[m.materialId] || 1), 0) : 0),
             breakdown,
             requiresStaffReview: data.requiresStaffReview || false,
             sheetInfo: data.sheetInfo || null,
@@ -625,6 +630,27 @@ export default function CalculatorPage() {
                       </div>
                     )}
 
+                    {signageConfig && signageConfig.materials && signageConfig.materials.length > 0 && (
+                      <div className="space-y-3 p-4 rounded bg-purple-50 border border-purple-200">
+                        <Label className="font-semibold">Materials & Quantities</Label>
+                        {signageConfig.materials.map((mat: any) => (
+                          <div key={mat.materialId} className="flex items-center gap-3">
+                            <div className="flex-1"><p className="font-medium">{mat.name}</p>
+                              <p className="text-sm text-gray-500">{mat.unit} - {formatTZS(mat.pricePerUnit)}/{mat.unit}</p></div>
+                            <div className="flex items-center gap-2">
+                              <Button variant="outline" size="icon" onClick={() => setMaterialQuantities(prev => ({ ...prev, [mat.materialId]: Math.max(0, (prev[mat.materialId] || 1) - 1) }))}>-</Button>
+                              <Input type="number" className="w-20 text-center" value={materialQuantities[mat.materialId] || 1} onChange={(e) => setMaterialQuantities(prev => ({ ...prev, [mat.materialId]: parseFloat(e.target.value) || 0 }))} />
+                              <Button variant="outline" size="icon" onClick={() => setMaterialQuantities(prev => ({ ...prev, [mat.materialId]: (prev[mat.materialId] || 1) + 1 }) )}>+</Button>
+                            </div>
+                            <span className="font-medium w-24 text-right">{formatTZS((mat.pricePerUnit || 0) * (materialQuantities[mat.materialId] || 1))}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between pt-2 border-t">
+                          <span className="font-semibold">Materials Total</span>
+                          <span className="font-bold text-orange-600">{formatTZS(signageConfig.materials.reduce((sum: number, m: any) => sum + (m.pricePerUnit || 0) * (materialQuantities[m.materialId] || 1), 0))}</span>
+                        </div>
+                      </div>
+                    )}
                     <Button className="w-full" onClick={() => setStep("result")}>
                       Calculate Price
                       <ArrowRight className="w-4 h-4 ml-2" />
