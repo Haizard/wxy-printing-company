@@ -74,6 +74,12 @@ interface RuleForm {
   currency: string;
   isInternalCost: boolean;
   bands: BandForm[];
+  // Sheet optimization fields
+  sheetOptEnabled: boolean;
+  sheetSize: string;
+  itemWidthMm: string;
+  itemHeightMm: string;
+  wasteFactor: string;
 }
 
 const emptyBand: BandForm = {
@@ -97,6 +103,11 @@ const emptyForm: RuleForm = {
   currency: "TZS",
   isInternalCost: false,
   bands: [{ ...emptyBand }],
+  sheetOptEnabled: false,
+  sheetSize: "A4",
+  itemWidthMm: "",
+  itemHeightMm: "",
+  wasteFactor: "5",
 };
 
 export default function PriceRulesPage() {
@@ -122,7 +133,9 @@ export default function PriceRulesPage() {
   const openEdit = (rule: any) => {
     setEditingRule(rule);
     const filter = rule.optionFilter || {};
-    const filterKeys = Object.keys(filter);
+    // Extract sheet optimization if present
+    const sheetOpt = filter._sheetOptimization || {};
+    const filterKeys = Object.keys(filter).filter(k => k !== '_sheetOptimization');
     setForm({
       productId: rule.productId || "",
       pricingModel: rule.pricingModel || "",
@@ -132,6 +145,11 @@ export default function PriceRulesPage() {
       minCharge: rule.minCharge ? String(rule.minCharge) : "",
       currency: rule.currency || "TZS",
       isInternalCost: rule.isInternalCost || false,
+      sheetOptEnabled: sheetOpt.enabled || false,
+      sheetSize: sheetOpt.sheetSize || "A4",
+      itemWidthMm: sheetOpt.itemWidthMm ? String(sheetOpt.itemWidthMm) : "",
+      itemHeightMm: sheetOpt.itemHeightMm ? String(sheetOpt.itemHeightMm) : "",
+      wasteFactor: sheetOpt.wasteFactor ? String(sheetOpt.wasteFactor * 100) : "5",
       bands:
         rule.bands && rule.bands.length > 0
           ? rule.bands.map((b: any) => ({
@@ -178,9 +196,19 @@ export default function PriceRulesPage() {
     }
     setSaving(true);
     try {
-      const optionFilter: Record<string, string> = {};
+      const optionFilter: Record<string, any> = {};
       if (form.optionFilterKey && form.optionFilterValue) {
         optionFilter[form.optionFilterKey] = form.optionFilterValue;
+      }
+      // Add sheet optimization to optionFilter if enabled
+      if (form.sheetOptEnabled && form.itemWidthMm && form.itemHeightMm) {
+        optionFilter._sheetOptimization = {
+          enabled: true,
+          sheetSize: form.sheetSize,
+          itemWidthMm: Number(form.itemWidthMm),
+          itemHeightMm: Number(form.itemHeightMm),
+          wasteFactor: form.wasteFactor ? Number(form.wasteFactor) / 100 : 0.05,
+        };
       }
 
       const bands = form.bands
@@ -596,6 +624,96 @@ export default function PriceRulesPage() {
                 }
               />
               <Label className="cursor-pointer">Internal cost rule</Label>
+            </div>
+
+            <div className="border border-[var(--glass-border)] rounded-[var(--radius-md)] p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-semibold">Sheet Optimization</Label>
+                  <p className="text-caption text-[var(--text-tertiary)]">Auto-calculate how many items fit per sheet</p>
+                </div>
+                <Switch
+                  checked={form.sheetOptEnabled}
+                  onCheckedChange={(v) => setForm({ ...form, sheetOptEnabled: v })}
+                />
+              </div>
+              
+              {form.sheetOptEnabled && (
+                <div className="space-y-3 pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Sheet Size</Label>
+                      <Select value={form.sheetSize} onValueChange={(v) => setForm({ ...form, sheetSize: v })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="A3">A3 (297 × 420 mm)</SelectItem>
+                          <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
+                          <SelectItem value="SRA3">SRA3 (320 × 450 mm)</SelectItem>
+                          <SelectItem value="A2">A2 (420 × 594 mm)</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Waste Factor (%)</Label>
+                      <Input
+                        type="number"
+                        value={form.wasteFactor}
+                        onChange={(e) => setForm({ ...form, wasteFactor: e.target.value })}
+                        placeholder="5"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Item Width (mm)</Label>
+                      <Input
+                        type="number"
+                        value={form.itemWidthMm}
+                        onChange={(e) => setForm({ ...form, itemWidthMm: e.target.value })}
+                        placeholder="e.g. 90"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Item Height (mm)</Label>
+                      <Input
+                        type="number"
+                        value={form.itemHeightMm}
+                        onChange={(e) => setForm({ ...form, itemHeightMm: e.target.value })}
+                        placeholder="e.g. 55"
+                      />
+                    </div>
+                  </div>
+                  {(form.itemWidthMm && form.itemHeightMm && form.sheetSize) ? (() => {
+                    const sheets: Record<string, { w: number; h: number }> = {
+                      A4: { w: 210, h: 297 },
+                      A3: { w: 297, h: 420 },
+                      SRA3: { w: 320, h: 450 },
+                      A2: { w: 420, h: 594 },
+                    };
+                    const sheet = sheets[form.sheetSize] || sheets.A4;
+                    const iw = Number(form.itemWidthMm);
+                    const ih = Number(form.itemHeightMm);
+                    if (iw <= 0 || ih <= 0) return null;
+                    const cols = Math.floor(sheet.w / iw);
+                    const rows = Math.floor(sheet.h / ih);
+                    const itemsNormal = cols * rows;
+                    const rotCols = Math.floor(sheet.w / ih);
+                    const rotRows = Math.floor(sheet.h / iw);
+                    const itemsRotated = rotCols * rotRows;
+                    const best = Math.max(itemsNormal, itemsRotated);
+                    return (
+                      <div className="p-3 rounded-[var(--radius-md)] bg-[rgba(52,199,89,0.08)] border border-[rgba(52,199,89,0.2)]">
+                        <p className="text-caption text-[var(--text-secondary)]">
+                          <span className="font-semibold">Preview:</span> {best} items per {form.sheetSize} sheet ({cols}x{rows} normal, {rotCols}x{rotRows} rotated)
+                        </p>
+                      </div>
+                    );
+                  })() : null}
+                </div>
+              )}
             </div>
 
             {/* Bands */}

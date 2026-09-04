@@ -226,6 +226,7 @@ export default function CalculatorPage() {
             total: (data.subtotal || 0) + finishingTotal,
             breakdown,
             requiresStaffReview: data.requiresStaffReview || false,
+            sheetInfo: data.sheetInfo || null,
           });
         }
       } else {
@@ -778,6 +779,13 @@ export default function CalculatorPage() {
                         </div>
                       ))}
                     </div>
+
+                    {result.sheetInfo && (
+                      <div className="p-2 rounded bg-[rgba(46,125,255,0.08)] text-caption">
+                        <p className="text-[var(--accent-tertiary)] font-medium">Sheet: {result.sheetInfo.sheetSize}</p>
+                        <p className="text-[var(--text-secondary)]">{result.sheetInfo.itemsPerSheet} items/sheet, {result.sheetInfo.sheetsNeeded} sheets needed</p>
+                      </div>
+                    )}
 
                     {result.finishingTotal > 0 && (
                       <div className="flex justify-between text-caption">

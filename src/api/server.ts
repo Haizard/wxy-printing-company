@@ -207,6 +207,27 @@ app.get("/api/products/:id/pricing-schema", async (req, res) => {
 
 // ── Calculator / Pricing ────────────────────────────────────────────────────
 
+// Standard sheet sizes in mm
+const SHEET_SIZES: Record<string, { w: number; h: number }> = {
+  A4: { w: 210, h: 297 },
+  A3: { w: 297, h: 420 },
+  SRA3: { w: 320, h: 450 },
+  A2: { w: 420, h: 594 },
+};
+
+function calculateItemsPerSheet(sheetW: number, sheetH: number, itemW: number, itemH: number): number {
+  const cols = Math.floor(sheetW / itemW);
+  const rows = Math.floor(sheetH / itemH);
+  const normal = cols * rows;
+  
+  // Try rotated
+  const rotCols = Math.floor(sheetW / itemH);
+  const rotRows = Math.floor(sheetH / itemW);
+  const rotated = rotCols * rotRows;
+  
+  return Math.max(normal, rotated);
+}
+
 app.post("/api/calculator/quote", async (req, res) => {
   try {
     const { productId, categoryId, inputs } = req.body;
@@ -291,6 +312,29 @@ app.post("/api/calculator/quote", async (req, res) => {
       }
     }
 
+    // Check for sheet optimization
+    const sheetOpt = (rule.optionFilter as any)?._sheetOptimization;
+    let sheetInfo: any = null;
+    
+    if (sheetOpt?.enabled && sheetOpt.itemWidthMm && sheetOpt.itemHeightMm) {
+      const sheet = SHEET_SIZES[sheetOpt.sheetSize] || SHEET_SIZES.A4;
+      const itemsPerSheet = calculateItemsPerSheet(
+        sheet.w, sheet.h,
+        sheetOpt.itemWidthMm, sheetOpt.itemHeightMm
+      );
+      const wasteFactor = sheetOpt.wasteFactor || 0.05;
+      const sheetsNeeded = Math.ceil(qty / itemsPerSheet) * (1 + wasteFactor);
+      
+      sheetInfo = {
+        sheetSize: sheetOpt.sheetSize,
+        sheetDimensions: `${sheet.w} � ${sheet.h} mm`,
+        itemDimensions: `${sheetOpt.itemWidthMm} � ${sheetOpt.itemHeightMm} mm`,
+        itemsPerSheet,
+        sheetsNeeded: Math.ceil(sheetsNeeded),
+        wasteFactor: wasteFactor * 100,
+      };
+    }
+    
     if (product.pricingModel === "area_based_range" && inputs.widthCm && inputs.heightCm) {
       const areaSqm = (inputs.widthCm / 100) * (inputs.heightCm / 100);
       if (areaSqm < 1 && rule.minCharge) {
@@ -298,13 +342,15 @@ app.post("/api/calculator/quote", async (req, res) => {
       } else if (unitPrice > 0) {
         subtotal = Math.round(areaSqm * unitPrice);
       }
+    } else if (product.pricingModel === "imposition_sheet_based" && sheetInfo) {
+      // Sheet-based pricing: price per sheet � sheets needed
+      subtotal = sheetInfo.sheetsNeeded * unitPrice;
     } else if (unitPrice > 0) {
       subtotal = unitPrice * qty;
     }
 
     const requiresStaffReview =
       product.pricingModel === "signage_engrave_cut_formula" ||
-      product.pricingModel === "imposition_sheet_based" ||
       product.pricingModel === "coverage_qty_band" ||
       subtotal === 0;
 
@@ -317,6 +363,7 @@ app.post("/api/calculator/quote", async (req, res) => {
       total: subtotal,
       pricingModel: product.pricingModel,
       requiresStaffReview,
+      sheetInfo,
     });
   } catch (error) {
     console.error("Calculator error:", error);
