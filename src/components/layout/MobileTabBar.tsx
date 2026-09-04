@@ -48,6 +48,7 @@ const moreItems: NavItem[] = [
   { to: "/quotes", icon: Layers, label: "Quotes", allowedRoles: ["admin", "sales"] },
   { to: "/reports", icon: BarChart3, label: "Reports", allowedRoles: ["admin", "sales"] },
   { to: "/price-rules", icon: DollarSign, label: "Price Rules", allowedRoles: ["admin"] },
+  { to: "/signage-materials", icon: Package, label: "Materials", allowedRoles: ["admin"] },
   { to: "/projects", icon: FolderOpen, label: "Projects" },
   { to: "/messages", icon: Mail, label: "Contact Messages", allowedRoles: ["admin"] },
   { to: "/users", icon: Users, label: "Users", allowedRoles: ["admin"] },

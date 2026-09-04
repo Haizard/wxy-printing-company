@@ -1,0 +1,149 @@
+
+// -- Signage Materials --
+
+app.get("/api/signage-material-categories", authMiddleware, async (_req, res) => {
+  try {
+    const categories = await db.select().from(signageMaterialCategories).orderBy(signageMaterialCategories.sortOrder);
+    res.json(categories);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.post("/api/signage-material-categories", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { name, slug, description, sortOrder } = req.body;
+    const [category] = await db.insert(signageMaterialCategories).values({ name, slug, description, sortOrder: sortOrder || 0 }).returning();
+    res.json(category);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.put("/api/signage-material-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { name, slug, description, sortOrder, isActive } = req.body;
+    const [updated] = await db.update(signageMaterialCategories).set({ name, slug, description, sortOrder, isActive }).where(eq(signageMaterialCategories.id, req.params.id)).returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.delete("/api/signage-material-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    await db.delete(signageMaterialCategories).where(eq(signageMaterialCategories.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.get("/api/signage-materials", async (_req, res) => {
+  try {
+    const materials = await db.select().from(signageMaterials);
+    res.json(materials);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.get("/api/signage-materials/:id", async (req, res) => {
+  try {
+    const [material] = await db.select().from(signageMaterials).where(eq(signageMaterials.id, req.params.id));
+    if (!material) return res.status(404).json({ error: "Not found" });
+    res.json(material);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.post("/api/signage-materials", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { categoryId, name, slug, description, unit, pricePerUnit, costPerUnit, minOrderQty, leadTimeDays, supplier } = req.body;
+    const [material] = await db.insert(signageMaterials).values({ categoryId, name, slug, description, unit, pricePerUnit, costPerUnit, minOrderQty: minOrderQty || "1", leadTimeDays, supplier }).returning();
+    res.json(material);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.put("/api/signage-materials/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { categoryId, name, slug, description, unit, pricePerUnit, costPerUnit, minOrderQty, leadTimeDays, supplier, isActive } = req.body;
+    const [updated] = await db.update(signageMaterials).set({ categoryId, name, slug, description, unit, pricePerUnit, costPerUnit, minOrderQty, leadTimeDays, supplier, isActive }).where(eq(signageMaterials.id, req.params.id)).returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.delete("/api/signage-materials/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    await db.delete(signageMaterials).where(eq(signageMaterials.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.get("/api/signage-configs", async (_req, res) => {
+  try {
+    const configs = await db.select().from(signageProductConfigs);
+    res.json(configs);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.get("/api/signage-configs/:id", async (req, res) => {
+  try {
+    const [config] = await db.select().from(signageProductConfigs).where(eq(signageProductConfigs.id, req.params.id));
+    if (!config) return res.status(404).json({ error: "Not found" });
+    const configMaterials = await db.select().from(signageConfigMaterials).innerJoin(signageMaterials, eq(signageConfigMaterials.materialId, signageMaterials.id)).where(eq(signageConfigMaterials.configId, req.params.id));
+    res.json({ ...config, materials: configMaterials });
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.post("/api/signage-configs", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { productId, name, description } = req.body;
+    const [config] = await db.insert(signageProductConfigs).values({ productId, name, description }).returning();
+    res.json(config);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.put("/api/signage-configs/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { productId, name, description, isActive } = req.body;
+    const [updated] = await db.update(signageProductConfigs).set({ productId, name, description, isActive }).where(eq(signageProductConfigs.id, req.params.id)).returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.delete("/api/signage-configs/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    await db.delete(signageProductConfigs).where(eq(signageProductConfigs.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.post("/api/signage-configs/:id/materials", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    const { materialId, isRequired, defaultValue, maxValue, sortOrder } = req.body;
+    const [cm] = await db.insert(signageConfigMaterials).values({ configId: req.params.id, materialId, isRequired: isRequired !== false, defaultValue, maxValue, sortOrder: sortOrder || 0 }).returning();
+    res.json(cm);
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.delete("/api/signage-configs/materials/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!isAdminUser(user)) return res.status(403).json({ error: "Admin access required" });
+    await db.delete(signageConfigMaterials).where(eq(signageConfigMaterials.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});

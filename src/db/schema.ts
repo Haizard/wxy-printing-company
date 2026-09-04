@@ -617,6 +617,89 @@ export const contactMessages = pgTable(
   }),
 );
 
+
+// -- Signage Materials --
+
+export const signageMaterialCategories = pgTable(
+  "signage_material_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").unique().notNull(),
+    description: text("description"),
+    sortOrder: integer("sort_order").default(0),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("signage_material_categories_slug_idx").on(table.slug),
+  }),
+);
+
+export const signageMaterials = pgTable(
+  "signage_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => signageMaterialCategories.id),
+    name: text("name").notNull(),
+    slug: text("slug").unique().notNull(),
+    description: text("description"),
+    unit: text("unit").notNull(),
+    pricePerUnit: integer("price_per_unit").notNull(),
+    costPerUnit: integer("cost_per_unit"),
+    minOrderQty: numeric("min_order_qty").default("1"),
+    leadTimeDays: integer("lead_time_days"),
+    supplier: text("supplier"),
+    imageUrl: text("image_url"),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("signage_materials_slug_idx").on(table.slug),
+    categoryIdx: index("signage_materials_category_idx").on(table.categoryId),
+  }),
+);
+
+export const signageProductConfigs = pgTable(
+  "signage_product_configs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    productIdx: index("signage_product_configs_product_idx").on(table.productId),
+  }),
+);
+
+export const signageConfigMaterials = pgTable(
+  "signage_config_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    configId: uuid("config_id")
+      .notNull()
+      .references(() => signageProductConfigs.id),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => signageMaterials.id),
+    isRequired: boolean("is_required").default(true),
+    defaultValue: numeric("default_value"),
+    maxValue: numeric("max_value"),
+    sortOrder: integer("sort_order").default(0),
+  },
+  (table) => ({
+    configIdx: index("signage_config_materials_config_idx").on(table.configId),
+    materialIdx: index("signage_config_materials_material_idx").on(table.materialId),
+  }),
+);
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
