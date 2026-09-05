@@ -218,7 +218,11 @@ export default function AboutPage() {
       </section>
 
       {/* Core divisions */}
-      <section className="px-4 lg:px-8 py-16">
+      <section className="relative overflow-hidden px-4 lg:px-8 py-16">
+        <div className="absolute inset-0 -z-10">
+          <img src="/images_new/workshop-bg.png" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/90" />
+        </div>
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0 }}
