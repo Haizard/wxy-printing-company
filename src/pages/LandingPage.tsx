@@ -197,13 +197,13 @@ export default function LandingPage() {
                 className="w-full h-full object-cover"
                 loading="eager"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Hero content */}
-        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-20">
+        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-20 backdrop-blur-sm bg-black/20 rounded-2xl my-8">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={currentSlide}

@@ -376,10 +376,10 @@ export default function ProductsPage() {
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
           <img src="/images_new/work-shop.png" alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
         </div>
 
-        <div className="relative max-w-6xl mx-auto px-4 lg:px-8 py-12 lg:py-16">
+        <div className="relative max-w-6xl mx-auto px-4 lg:px-8 py-12 lg:py-16 backdrop-blur-sm bg-black/20 rounded-2xl my-8">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
