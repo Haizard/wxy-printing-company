@@ -258,7 +258,7 @@ export default function OurWorkPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="relative overflow-hidden h-[600px] max-w-[1500px] mx-auto mb-10">
+      <section className="relative overflow-hidden h-[600px] mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
           <img src="/images_new/hero-2.png" alt="" className="w-full h-full object-cover" />
