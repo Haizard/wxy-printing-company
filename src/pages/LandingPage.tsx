@@ -203,7 +203,7 @@ export default function LandingPage() {
         </div>
 
         {/* Hero content */}
-        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-20 backdrop-blur-sm bg-black/20 rounded-2xl my-8">
+        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-20">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={currentSlide}
