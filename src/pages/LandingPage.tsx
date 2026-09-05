@@ -179,7 +179,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero with image slider */}
-      <section className="relative overflow-hidden min-h-[500px] lg:min-h-[600px] mb-10">
+      <section className="relative overflow-hidden h-[600px] max-w-[1500px] mx-auto mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
           <AnimatePresence mode="wait" initial={false}>

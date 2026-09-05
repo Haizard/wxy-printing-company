@@ -372,7 +372,7 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="relative overflow-hidden min-h-[250px] lg:min-h-[300px] mb-10">
+      <section className="relative overflow-hidden h-[600px] max-w-[1500px] mx-auto mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
           <img src="/images_new/hero-1.png" alt="" className="w-full h-full object-cover" />
