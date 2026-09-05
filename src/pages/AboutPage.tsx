@@ -27,7 +27,7 @@ export default function AboutPage() {
       <section className="relative overflow-hidden min-h-[250px] lg:min-h-[300px] mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
-          <img src="/images/hero-7.jpeg" alt="" className="w-full h-full object-cover" />
+          <img src="/images_new/hero-6.png" alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
         </div>
 
@@ -134,7 +134,7 @@ export default function AboutPage() {
             >
               <Card className="overflow-hidden">
                 <div className="relative p-8 text-white min-h-[280px] flex flex-col justify-end">
-                  <img src="/images/hero-6.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <img src="/images_new/company-brand.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
                   <div className="relative z-10">
                     <p className="text-title-2 font-bold leading-snug" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>

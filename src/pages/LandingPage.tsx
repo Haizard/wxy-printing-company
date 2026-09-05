@@ -21,7 +21,7 @@ const heroSlides = [
     subtitle:
       "From 2D wall branding to illuminated 3D letters, LED signage and digital displays — we design and manufacture signage that captivates day or night.",
     gradient: "from-[var(--accent-primary)] to-[#E84530]",
-    image: "/images/hero-1.jpeg",
+    image: "/images_new/hero-1.png",
   },
   {
     kicker: "Fabrication & Structural Branding",
@@ -30,7 +30,7 @@ const heroSlides = [
     subtitle:
       "Complete branding systems for fuel stations, ATMs, exhibitions and outdoor landmarks — structures that stand out and stand the test of time.",
     gradient: "from-[var(--accent-tertiary)] to-[#7C3AED]",
-    image: "/images/hero-2.jpeg",
+    image: "/images_new/hero-2.png",
   },
   {
     kicker: "Promotional Materials",
@@ -39,7 +39,7 @@ const heroSlides = [
     subtitle:
       "Stationery, BrandWear merchandise, marketing collateral and event materials that reinforce your identity in every single interaction.",
     gradient: "from-[var(--accent-secondary)] to-[#FF8C00]",
-    image: "/images/hero-3.jpeg",
+    image: "/images_new/hero-3.png",
   },
   {
     kicker: "Printing & Production",
@@ -48,7 +48,7 @@ const heroSlides = [
     subtitle:
       "Digital, offset, large-format MegaPrint and DTF VaaPrint production — flawless results, quick turnaround, from one in-house factory.",
     gradient: "from-[var(--accent-success)] to-[#1B8A4A]",
-    image: "/images/hero-4.jpeg",
+    image: "/images_new/hero-4.png",
   },
   {
     kicker: "Custom Solutions",
@@ -57,7 +57,7 @@ const heroSlides = [
     subtitle:
       "Bespoke signage, custom fabrication, unique promotional items and specialised print — if you can imagine it, we can build it.",
     gradient: "from-[#6366F1] to-[#EC4899]",
-    image: "/images/hero-5.jpeg",
+    image: "/images_new/hero-5.png",
   },
 ];
 
