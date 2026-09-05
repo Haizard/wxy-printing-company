@@ -27,7 +27,7 @@ export default function AboutPage() {
       <section className="relative overflow-hidden h-[600px] mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
-          <img src="/images_new/company-brand.png" alt="" className="w-full h-full object-cover" />
+          <img src="/images_new/company-brand.png" alt="" className="w-full h-full object-cover brightness-50" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
         </div>
 
@@ -220,7 +220,7 @@ export default function AboutPage() {
       {/* Core divisions */}
       <section className="relative overflow-hidden px-4 lg:px-8 py-16">
         <div className="absolute inset-0 -z-10">
-          <img src="/images_new/workshop-bg.png" alt="" className="w-full h-full object-cover" />
+          <img src="/images_new/workshop-bg.png" alt="" className="w-full h-full object-cover brightness-50" />
           <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/90" />
         </div>
         <div className="max-w-5xl mx-auto">

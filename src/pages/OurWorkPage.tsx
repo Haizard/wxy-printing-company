@@ -261,7 +261,7 @@ export default function OurWorkPage() {
       <section className="relative overflow-hidden h-[600px] mb-10">
         {/* Background image - full bleed */}
         <div className="absolute inset-0 -z-10">
-          <img src="/images_new/work-shop.png" alt="" className="w-full h-full object-cover" />
+          <img src="/images_new/work-shop.png" alt="" className="w-full h-full object-cover brightness-50" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
         </div>
 
