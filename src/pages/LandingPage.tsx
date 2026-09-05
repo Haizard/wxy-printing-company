@@ -1,16 +1,65 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   Sparkles,
-  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
   Star,
   Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SITE, FAMILIES, STANDARDS } from "@/lib/site-content";
+
+const heroSlides = [
+  {
+    kicker: "Signage & Visual Communication",
+    title: "Your brand deserves to be",
+    highlight: "seen, remembered & respected",
+    subtitle:
+      "From 2D wall branding to illuminated 3D letters, LED signage and digital displays — we design and manufacture signage that captivates day or night.",
+    gradient: "from-[var(--accent-primary)] to-[#E84530]",
+    image: "/images/hero-1.jpeg",
+  },
+  {
+    kicker: "Fabrication & Structural Branding",
+    title: "Built strong.",
+    highlight: "Designed bold.",
+    subtitle:
+      "Complete branding systems for fuel stations, ATMs, exhibitions and outdoor landmarks — structures that stand out and stand the test of time.",
+    gradient: "from-[var(--accent-tertiary)] to-[#7C3AED]",
+    image: "/images/hero-2.jpeg",
+  },
+  {
+    kicker: "Promotional Materials",
+    title: "Tangible branding that",
+    highlight: "travels, connects & converts",
+    subtitle:
+      "Stationery, BrandWear merchandise, marketing collateral and event materials that reinforce your identity in every single interaction.",
+    gradient: "from-[var(--accent-secondary)] to-[#FF8C00]",
+    image: "/images/hero-3.jpeg",
+  },
+  {
+    kicker: "Printing & Production",
+    title: "Where technology meets",
+    highlight: "craftsmanship",
+    subtitle:
+      "Digital, offset, large-format MegaPrint and DTF VaaPrint production — flawless results, quick turnaround, from one in-house factory.",
+    gradient: "from-[var(--accent-success)] to-[#1B8A4A]",
+    image: "/images/hero-4.jpeg",
+  },
+  {
+    kicker: "Custom Solutions",
+    title: "Your vision.",
+    highlight: "Manufactured.",
+    subtitle:
+      "Bespoke signage, custom fabrication, unique promotional items and specialised print — if you can imagine it, we can build it.",
+    gradient: "from-[#6366F1] to-[#EC4899]",
+    image: "/images/hero-5.jpeg",
+  },
+];
 
 const testimonials = [
   {
@@ -64,52 +113,23 @@ const stats = [
   { value: "100%", label: "In-House Production" },
 ];
 
-const heroSlides = [
-  {
-    kicker: "Signage & Visual Communication",
-    title: "Your brand deserves to be",
-    highlight: "seen, remembered & respected",
-    subtitle:
-      "From 2D wall branding to illuminated 3D letters, LED signage and digital displays — we design and manufacture signage that captivates day or night.",
-    gradient: "from-[var(--accent-primary)] to-[#E84530]",
-  },
-  {
-    kicker: "Fabrication & Structural Branding",
-    title: "Built strong.",
-    highlight: "Designed bold.",
-    subtitle:
-      "Complete branding systems for fuel stations, ATMs, exhibitions and outdoor landmarks — structures that stand out and stand the test of time.",
-    gradient: "from-[var(--accent-tertiary)] to-[#7C3AED]",
-  },
-  {
-    kicker: "Promotional Materials",
-    title: "Tangible branding that",
-    highlight: "travels, connects & converts",
-    subtitle:
-      "Stationery, BrandWear merchandise, marketing collateral and event materials that reinforce your identity in every single interaction.",
-    gradient: "from-[var(--accent-secondary)] to-[#FF8C00]",
-  },
-  {
-    kicker: "Printing & Production",
-    title: "Where technology meets",
-    highlight: "craftsmanship",
-    subtitle:
-      "Digital, offset, large-format MegaPrint and DTF VaaPrint production — flawless results, quick turnaround, from one in-house factory.",
-    gradient: "from-[var(--accent-success)] to-[#1B8A4A]",
-  },
-];
-
 export default function LandingPage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [testimonialPage, setTestimonialPage] = useState(0);
   const testimonialPages = Math.ceil(testimonials.length / 3);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 10000);
-    return () => clearInterval(timer);
+  const goNext = useCallback(() => {
+    setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
   }, []);
+
+  const goPrev = useCallback(() => {
+    setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(goNext, 8000);
+    return () => clearInterval(timer);
+  }, [goNext]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -117,6 +137,8 @@ export default function LandingPage() {
     }, 6000);
     return () => clearInterval(timer);
   }, [testimonialPages]);
+
+  const slide = heroSlides[currentSlide];
 
   return (
     <div className="min-h-screen">
@@ -156,81 +178,127 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero with sliding banner */}
-      <section className="relative overflow-hidden px-4 lg:px-8 pt-16 lg:pt-24 pb-20">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* Sliding hero banner */}
-          <div className="relative min-h-[430px] lg:min-h-[460px]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentSlide}
-                initial={{ opacity: 0, x: 60 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -60 }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-                className="absolute inset-0"
-              >
-                <div className="inline-flex items-center gap-2 glass-card-subtle px-4 py-2 rounded-pill mb-6">
-                  <Sparkles className="w-4 h-4 text-[var(--accent-secondary)]" />
-                  <span className="text-caption font-medium text-[var(--text-secondary)]">
-                    {SITE.tagline}
-                  </span>
-                </div>
+      {/* Hero with image slider */}
+      <section className="relative overflow-hidden min-h-[500px] lg:min-h-[600px] mb-10">
+        {/* Background image - full bleed */}
+        <div className="absolute inset-0 -z-10">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8, ease: "easeInOut" }}
+              className="absolute inset-0"
+            >
+              <img
+                src={slide.image}
+                alt={slide.kicker}
+                className="w-full h-full object-cover"
+                loading="eager"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-                <h1 className="text-large-title lg:text-[56px] font-bold text-[var(--text-primary)] mb-5 leading-tight">
-                  {heroSlides[currentSlide].title}{" "}
-                  <span className={`bg-gradient-to-r ${heroSlides[currentSlide].gradient} bg-clip-text text-transparent`}>
-                    {heroSlides[currentSlide].highlight}
-                  </span>
-                </h1>
+        {/* Hero content */}
+        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-20">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -30 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="relative z-10"
+            >
+              <div className="inline-flex items-center gap-2 glass-card-subtle px-4 py-2 rounded-pill mb-6" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
+                <Sparkles className="w-4 h-4 text-[var(--accent-secondary)]" />
+                <span className="text-caption font-medium text-white/90">
+                  {SITE.tagline}
+                </span>
+              </div>
 
-                <p className="text-caption font-semibold uppercase tracking-widest text-[var(--accent-primary)] mb-3">
-                  {heroSlides[currentSlide].kicker}
-                </p>
+              <p className="text-caption font-semibold uppercase tracking-widest text-[var(--accent-secondary)] mb-3" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}>
+                {slide.kicker}
+              </p>
 
-                <p className="text-body lg:text-title-3 text-[var(--text-secondary)] max-w-2xl mx-auto mb-8">
-                  {heroSlides[currentSlide].subtitle}
-                </p>
+              <h1 className="text-large-title lg:text-[56px] font-bold text-white mb-5 leading-tight" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.8)" }}>
+                {slide.title}{" "}
+                <span className={`bg-gradient-to-r ${slide.gradient} bg-clip-text text-transparent`}>
+                  {slide.highlight}
+                </span>
+              </h1>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link to="/products">
-                    <Button size="lg" className="w-full sm:w-auto">
-                      Explore Our Capabilities
-                      <ArrowRight className="w-5 h-5" />
-                    </Button>
-                  </Link>
-                  <Link to="/contact">
-                    <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                      Request a Quote
-                    </Button>
-                  </Link>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+              <p className="text-body lg:text-title-3 text-white/90 max-w-2xl mx-auto mb-8" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.7)" }}>
+                {slide.subtitle}
+              </p>
 
-          {/* Slide indicators */}
-          <div className="flex items-center justify-center gap-2 mt-6">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link to="/products">
+                  <Button size="lg" className="w-full sm:w-auto">
+                    Explore Our Capabilities
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <Link to="/contact">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto border-white/30 text-white hover:bg-white/10">
+                    Request a Quote
+                  </Button>
+                </Link>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Navigation arrows + dots */}
+        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4 px-4">
+          <button
+            onClick={goPrev}
+            className="w-12 h-12 rounded-full glass-chrome border border-[var(--glass-border)] flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+            aria-label="Previous slide"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <div className="flex items-center gap-2">
             {heroSlides.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentSlide(i)}
                 className={`rounded-full transition-all duration-300 ${
                   i === currentSlide
-                    ? "w-8 h-2 bg-[var(--accent-primary)]"
-                    : "w-2 h-2 bg-[var(--text-tertiary)] hover:bg-[var(--text-secondary)]"
+                    ? "w-8 h-2 bg-white"
+                    : "w-2 h-2 bg-white/40 hover:bg-white/70"
                 }`}
                 aria-label={`Go to slide ${i + 1}`}
               />
             ))}
           </div>
 
-          {/* Stats */}
+          <button
+            onClick={goNext}
+            className="w-12 h-12 rounded-full glass-chrome border border-[var(--glass-border)] flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+            aria-label="Next slide"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Decorative gradient orbs */}
+        <div className="absolute top-20 left-10 w-72 h-72 bg-[var(--accent-primary)] opacity-[0.04] rounded-full blur-[100px]" />
+        <div className="absolute bottom-10 right-10 w-96 h-96 bg-[var(--accent-tertiary)] opacity-[0.04] rounded-full blur-[120px]" />
+      </section>
+
+      {/* Stats */}
+      <section className="px-4 lg:px-8 py-10">
+        <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-14"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
           >
             {stats.map((stat) => (
               <Card key={stat.label} variant="subtle" className="text-center">
@@ -244,10 +312,6 @@ export default function LandingPage() {
             ))}
           </motion.div>
         </div>
-
-        {/* Decorative gradient orbs */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-[var(--accent-primary)] opacity-[0.04] rounded-full blur-[100px]" />
-        <div className="absolute bottom-10 right-10 w-96 h-96 bg-[var(--accent-tertiary)] opacity-[0.04] rounded-full blur-[120px]" />
       </section>
 
       {/* Core divisions */}

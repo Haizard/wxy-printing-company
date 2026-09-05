@@ -258,8 +258,14 @@ export default function OurWorkPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="relative overflow-hidden px-4 lg:px-8 pt-16 lg:pt-20 pb-12">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative overflow-hidden min-h-[250px] lg:min-h-[300px] mb-10">
+        {/* Background image - full bleed */}
+        <div className="absolute inset-0 -z-10">
+          <img src="/images/hero-10.jpeg" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
+        </div>
+
+        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-16 lg:py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -267,12 +273,12 @@ export default function OurWorkPage() {
           >
             <div className="inline-flex items-center gap-2 glass-card-subtle px-4 py-2 rounded-pill mb-6">
               <Briefcase className="w-4 h-4 text-[var(--accent-primary)]" />
-              <span className="text-caption font-medium text-[var(--text-secondary)]">
+              <span className="text-caption font-medium text-white/90" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
                 Our Work
               </span>
             </div>
 
-            <h1 className="text-large-title lg:text-[56px] font-bold text-[var(--text-primary)] mb-6 leading-tight">
+            <h1 className="text-large-title lg:text-[56px] font-bold text-white mb-6 leading-tight" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.8)" }}>
               Manufacturing{" "}
               <span className="bg-gradient-to-r from-[var(--accent-primary)] to-[#E84530] bg-clip-text text-transparent">
                 visibility
@@ -280,7 +286,7 @@ export default function OurWorkPage() {
               . Building brands.
             </h1>
 
-            <p className="text-body lg:text-title-3 text-[var(--text-secondary)] max-w-2xl mx-auto mb-8">
+            <p className="text-body lg:text-title-3 text-white/90 max-w-2xl mx-auto mb-8" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.7)" }}>
               Browse completed work across signage & visual communication,
               fabrication & structural branding, promotional materials and
               printing & production — everything designed and manufactured
@@ -288,8 +294,6 @@ export default function OurWorkPage() {
             </p>
           </motion.div>
         </div>
-
-        <div className="absolute top-20 left-10 w-72 h-72 bg-[var(--accent-primary)] opacity-[0.04] rounded-full blur-[100px]" />
       </section>
 
       {/* Admin Controls */}

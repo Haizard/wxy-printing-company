@@ -24,8 +24,14 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="relative overflow-hidden px-4 lg:px-8 pt-16 lg:pt-24 pb-20">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative overflow-hidden min-h-[250px] lg:min-h-[300px] mb-10">
+        {/* Background image - full bleed */}
+        <div className="absolute inset-0 -z-10">
+          <img src="/images/hero-7.jpeg" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
+        </div>
+
+        <div className="relative max-w-4xl mx-auto text-center px-4 lg:px-8 py-16 lg:py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -33,12 +39,12 @@ export default function AboutPage() {
           >
             <div className="inline-flex items-center gap-2 glass-card-subtle px-4 py-2 rounded-pill mb-6">
               <Factory className="w-4 h-4 text-[var(--accent-primary)]" />
-              <span className="text-caption font-medium text-[var(--text-secondary)]">
+              <span className="text-caption font-medium text-white/90" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
                 About {SITE.name}
               </span>
             </div>
 
-            <h1 className="text-large-title lg:text-[56px] font-bold text-[var(--text-primary)] mb-6 leading-tight">
+            <h1 className="text-large-title lg:text-[56px] font-bold text-white mb-6 leading-tight" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.8)" }}>
               Where creativity{" "}
               <span className="bg-gradient-to-r from-[var(--accent-primary)] to-[#E84530] bg-clip-text text-transparent">
                 meets impact
@@ -46,7 +52,7 @@ export default function AboutPage() {
               across Tanzania
             </h1>
 
-            <p className="text-body lg:text-title-3 text-[var(--text-secondary)] max-w-2xl mx-auto mb-8">
+            <p className="text-body lg:text-title-3 text-white/90 max-w-2xl mx-auto mb-8" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.7)" }}>
               {SITE.name} is a modern manufacturing and printing powerhouse —
               an {SITE.descriptor} based in {SITE.contact.location}.
             </p>
@@ -59,17 +65,13 @@ export default function AboutPage() {
                 </Button>
               </Link>
               <Link to="/our-work">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto border-white/30 text-white hover:bg-white/10">
                   See Our Work
                 </Button>
               </Link>
             </div>
           </motion.div>
         </div>
-
-        {/* Decorative orbs */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-[var(--accent-primary)] opacity-[0.04] rounded-full blur-[100px]" />
-        <div className="absolute bottom-10 right-10 w-96 h-96 bg-[var(--accent-tertiary)] opacity-[0.04] rounded-full blur-[120px]" />
       </section>
 
       {/* Stats */}
@@ -131,15 +133,18 @@ export default function AboutPage() {
               className="relative"
             >
               <Card className="overflow-hidden">
-                <div className="bg-gradient-to-br from-[var(--accent-primary)] to-[#E84530] p-8 text-white">
-                  <Award className="w-14 h-14 mb-5 opacity-90" />
-                  <p className="text-title-2 font-bold leading-snug">
-                    {SITE.mission}
-                  </p>
-                  <p className="text-body opacity-90 mt-3">
-                    From concept to completion, we transform ideas into powerful,
-                    real-world brand experiences.
-                  </p>
+                <div className="relative p-8 text-white min-h-[280px] flex flex-col justify-end">
+                  <img src="/images/hero-6.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+                  <div className="relative z-10">
+                    <p className="text-title-2 font-bold leading-snug" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>
+                      {SITE.mission}
+                    </p>
+                    <p className="text-body opacity-90 mt-3" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.5)" }}>
+                      From concept to completion, we transform ideas into powerful,
+                      real-world brand experiences.
+                    </p>
+                  </div>
                 </div>
                 <CardContent className="p-6">
                   <p className="text-caption font-semibold uppercase tracking-wide text-[var(--text-tertiary)] mb-3">

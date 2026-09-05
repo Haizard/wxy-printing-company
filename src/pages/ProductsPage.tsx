@@ -372,8 +372,14 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="relative overflow-hidden px-4 lg:px-8 pt-12 lg:pt-16 pb-6">
-        <div className="max-w-6xl mx-auto">
+      <section className="relative overflow-hidden min-h-[250px] lg:min-h-[300px] mb-10">
+        {/* Background image - full bleed */}
+        <div className="absolute inset-0 -z-10">
+          <img src="/images/hero-8.jpeg" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
+        </div>
+
+        <div className="relative max-w-6xl mx-auto px-4 lg:px-8 py-12 lg:py-16">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -383,24 +389,24 @@ export default function ProductsPage() {
             <div>
               <div className="inline-flex items-center gap-2 glass-card-subtle px-4 py-2 rounded-pill mb-4">
                 <Package className="w-4 h-4 text-[var(--accent-primary)]" />
-                <span className="text-caption font-medium text-[var(--text-secondary)]">
+                <span className="text-caption font-medium text-white/90" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
                   Our Product Catalogue
                 </span>
               </div>
-              <h1 className="text-large-title lg:text-[44px] font-bold text-[var(--text-primary)] leading-tight">
+              <h1 className="text-large-title lg:text-[44px] font-bold text-white leading-tight" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.8)" }}>
                 Shop our{" "}
                 <span className="bg-gradient-to-r from-[var(--accent-primary)] to-[#E84530] bg-clip-text text-transparent">
                   products
                 </span>
               </h1>
-              <p className="text-body text-[var(--text-secondary)] mt-3 max-w-2xl">
+              <p className="text-body text-white/90 mt-3 max-w-2xl" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.7)" }}>
                 Browse our full range — every item is priced to your exact
                 specification (size, material, quantity) with an instant quote.
               </p>
             </div>
             {isStaff ? (
               <Link to="/cart">
-                <Button variant="outline" size="lg" className="w-full lg:w-auto">
+                <Button variant="outline" size="lg" className="w-full lg:w-auto border-white/30 text-white hover:bg-white/10">
                   <ShoppingCart className="w-5 h-5 mr-2" />
                   Cart ({itemCount})
                 </Button>
@@ -409,7 +415,7 @@ export default function ProductsPage() {
               <Button
                 variant="outline"
                 size="lg"
-                className="w-full lg:w-auto"
+                className="w-full lg:w-auto border-white/30 text-white hover:bg-white/10"
                 onClick={goToMyRequests}
               >
                 <ClipboardList className="w-5 h-5 mr-2" />
