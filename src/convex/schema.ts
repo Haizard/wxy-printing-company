@@ -243,4 +243,148 @@ export default defineSchema({
     attachmentUrl: v.optional(v.string()),
     readBy: v.array(v.id("users")),
   }).index("by_thread", ["threadId"]),
+
+  // ── Customer Profiles ───────────────────────────────────────────────────
+  customerProfiles: defineTable({
+    userId: v.id("users"),
+    businessName: v.optional(v.string()),
+    billingAddress: v.optional(v.string()),
+    shippingAddress: v.optional(v.string()),
+    taxId: v.optional(v.string()),
+    paymentTerms: v.optional(v.number()),
+    creditLimit: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
+
+  // ── Service Items ───────────────────────────────────────────────────────
+  serviceItems: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    unitPrice: v.number(),
+    costPrice: v.optional(v.number()),
+    taxRate: v.optional(v.number()),
+    type: v.union(v.literal("product"), v.literal("service"), v.literal("hourly")),
+    unit: v.optional(v.string()),
+    isActive: v.boolean(),
+    linkedProductId: v.optional(v.id("products")),
+  }).index("by_type", ["type"]),
+
+  // ── Estimates ───────────────────────────────────────────────────────────
+  estimates: defineTable({
+    estimateNumber: v.string(),
+    customerId: v.id("users"),
+    createdBy: v.optional(v.id("users")),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("expired"),
+      v.literal("invoiced"),
+    ),
+    validUntil: v.optional(v.string()),
+    subtotal: v.number(),
+    taxTotal: v.number(),
+    total: v.number(),
+    notes: v.optional(v.string()),
+    terms: v.optional(v.string()),
+  })
+    .index("by_customer", ["customerId"])
+    .index("by_status", ["status"]),
+
+  estimateLines: defineTable({
+    estimateId: v.id("estimates"),
+    serviceItemId: v.optional(v.id("serviceItems")),
+    productId: v.optional(v.id("products")),
+    description: v.string(),
+    quantity: v.number(),
+    unitPrice: v.number(),
+    taxRate: v.optional(v.number()),
+    lineTotal: v.number(),
+    sortOrder: v.number(),
+  }).index("by_estimate", ["estimateId"]),
+
+  // ── Invoices ────────────────────────────────────────────────────────────
+  invoices: defineTable({
+    invoiceNumber: v.string(),
+    customerId: v.id("users"),
+    createdBy: v.optional(v.id("users")),
+    estimateId: v.optional(v.id("estimates")),
+    orderId: v.optional(v.id("orders")),
+    quoteId: v.optional(v.id("quotes")),
+    jobId: v.optional(v.id("jobs")),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("viewed"),
+      v.literal("paid"),
+      v.literal("partially_paid"),
+      v.literal("overdue"),
+      v.literal("cancelled"),
+    ),
+    subtotal: v.number(),
+    taxTotal: v.number(),
+    total: v.number(),
+    amountPaid: v.number(),
+    dueDate: v.optional(v.string()),
+    paymentTerms: v.number(),
+    notes: v.optional(v.string()),
+    terms: v.optional(v.string()),
+  })
+    .index("by_customer", ["customerId"])
+    .index("by_status", ["status"]),
+
+  invoiceLines: defineTable({
+    invoiceId: v.id("invoices"),
+    serviceItemId: v.optional(v.id("serviceItems")),
+    productId: v.optional(v.id("products")),
+    description: v.string(),
+    quantity: v.number(),
+    unitPrice: v.number(),
+    taxRate: v.optional(v.number()),
+    lineTotal: v.number(),
+    sortOrder: v.number(),
+  }).index("by_invoice", ["invoiceId"]),
+
+  // ── Payments ────────────────────────────────────────────────────────────
+  payments: defineTable({
+    invoiceId: v.id("invoices"),
+    amount: v.number(),
+    paymentMethod: v.optional(v.string()),
+    paymentDate: v.string(),
+    reference: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdBy: v.optional(v.id("users")),
+  }).index("by_invoice", ["invoiceId"]),
+
+  // ── Recurring Invoices ──────────────────────────────────────────────────
+  recurringInvoices: defineTable({
+    customerId: v.id("users"),
+    createdBy: v.optional(v.id("users")),
+    name: v.string(),
+    description: v.optional(v.string()),
+    frequency: v.union(
+      v.literal("weekly"),
+      v.literal("biweekly"),
+      v.literal("monthly"),
+      v.literal("quarterly"),
+      v.literal("yearly"),
+    ),
+    subtotal: v.number(),
+    taxTotal: v.number(),
+    total: v.number(),
+    startDate: v.string(),
+    endDate: v.optional(v.string()),
+    nextDueDate: v.string(),
+    lastInvoiceDate: v.optional(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("cancelled"),
+    ),
+    notes: v.optional(v.string()),
+  })
+    .index("by_customer", ["customerId"])
+    .index("by_status", ["status"]),
 });

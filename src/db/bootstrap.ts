@@ -20,6 +20,9 @@ const ENUM_DDL: Array<[type: string, values: string[]]> = [
   ["movement_type", ["in", "out", "waste", "return", "adjustment", "issue", "return_to_stock"]],
   ["purchase_order_status", ["draft", "ordered", "received", "cancelled"]],
   ["material_issuance_status", ["issued", "partial_return", "returned", "consumed"]],
+  ["estimate_status", ["draft", "sent", "accepted", "declined", "expired", "invoiced"]],
+  ["invoice_status", ["draft", "sent", "viewed", "paid", "partially_paid", "overdue", "cancelled"]],
+  ["recurring_status", ["active", "paused", "cancelled"]],
 ];
 
 const TABLE_DDL: string[] = [
@@ -315,6 +318,25 @@ const TABLE_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS signage_materials (id uuid primary key default gen_random_uuid(), category_id uuid not null references signage_material_categories(id), name text not null, slug text not null unique, description text, unit text not null, price_per_unit integer not null, cost_per_unit integer, min_order_qty numeric default 1, lead_time_days integer, supplier text, image_url text, is_active boolean default true, created_at timestamp default now())`,
   `CREATE TABLE IF NOT EXISTS signage_product_configs (id uuid primary key default gen_random_uuid(), product_id uuid not null references products(id), name text not null, description text, is_active boolean default true, created_at timestamp default now())`,
   `CREATE TABLE IF NOT EXISTS signage_config_materials (id uuid primary key default gen_random_uuid(), config_id uuid not null references signage_product_configs(id), material_id uuid not null references signage_materials(id), is_required boolean default true, default_value numeric, max_value numeric, sort_order integer default 0)`,
+
+  // ── Billing / Wave Panel tables ───────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS customer_profiles (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) unique, business_name text, billing_address text, shipping_address text, tax_id text, payment_terms integer default 30, credit_limit integer, currency text default 'TZS', notes text, created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS service_items (id uuid primary key default gen_random_uuid(), name text not null, description text, unit_price integer not null default 0, cost_price integer default 0, tax_rate numeric default '0', type text not null default 'product', unit text default 'piece', is_active boolean default true, linked_product_id uuid references products(id), created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS estimates (id uuid primary key default gen_random_uuid(), estimate_number text unique not null, customer_id uuid not null references users(id), created_by uuid references users(id), status estimate_status default 'draft', valid_until date, subtotal integer not null default 0, tax_total integer default 0, total integer not null default 0, notes text, terms text, created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS estimate_lines (id uuid primary key default gen_random_uuid(), estimate_id uuid not null references estimates(id), service_item_id uuid references service_items(id), product_id uuid references products(id), description text not null, quantity integer not null default 1, unit_price integer not null default 0, tax_rate numeric default '0', line_total integer not null default 0, sort_order integer default 0)`,
+
+  `CREATE TABLE IF NOT EXISTS invoices (id uuid primary key default gen_random_uuid(), invoice_number text unique not null, customer_id uuid not null references users(id), created_by uuid references users(id), estimate_id uuid references estimates(id), order_id uuid references orders(id), quote_id uuid references quotes(id), job_id uuid references jobs(id), status invoice_status default 'draft', subtotal integer not null default 0, tax_total integer default 0, total integer not null default 0, amount_paid integer default 0, due_date date, payment_terms integer default 30, notes text, terms text, created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS invoice_lines (id uuid primary key default gen_random_uuid(), invoice_id uuid not null references invoices(id), service_item_id uuid references service_items(id), product_id uuid references products(id), description text not null, quantity integer not null default 1, unit_price integer not null default 0, tax_rate numeric default '0', line_total integer not null default 0, sort_order integer default 0)`,
+
+  `CREATE TABLE IF NOT EXISTS payments (id uuid primary key default gen_random_uuid(), invoice_id uuid not null references invoices(id), amount integer not null, payment_method text default 'cash', payment_date timestamp default now(), reference text, notes text, created_by uuid references users(id), created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS recurring_invoices (id uuid primary key default gen_random_uuid(), customer_id uuid not null references users(id), created_by uuid references users(id), name text not null, description text, frequency text not null default 'monthly', subtotal integer not null default 0, tax_total integer default 0, total integer not null default 0, start_date date not null, end_date date, next_due_date date not null, last_invoice_date date, status recurring_status default 'active', notes text, created_at timestamp default now())`,
+
+  `CREATE TABLE IF NOT EXISTS recurring_invoice_lines (id uuid primary key default gen_random_uuid(), recurring_invoice_id uuid not null references recurring_invoices(id) on delete cascade, description text not null, quantity integer not null default 1, unit_price integer not null default 0, tax_rate numeric default '0', line_total integer not null default 0, sort_order integer default 0)`,
 ];
 
 // ── Additive columns (safe ALTER TABLE … ADD COLUMN IF NOT EXISTS) ──────────
@@ -373,7 +395,19 @@ const INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS signage_materials_category_idx ON signage_materials(category_id)` ,
   `CREATE INDEX IF NOT EXISTS signage_product_configs_product_idx ON signage_product_configs(product_id)` ,
   `CREATE INDEX IF NOT EXISTS signage_config_materials_config_idx ON signage_config_materials(config_id)` ,
-  `CREATE INDEX IF NOT EXISTS signage_config_materials_material_idx ON signage_config_materials(material_id)`
+  `CREATE INDEX IF NOT EXISTS signage_config_materials_material_idx ON signage_config_materials(material_id)`,
+  `CREATE INDEX IF NOT EXISTS customer_profiles_user_idx ON customer_profiles(user_id)`,
+  `CREATE INDEX IF NOT EXISTS service_items_type_idx ON service_items(type)`,
+  `CREATE INDEX IF NOT EXISTS estimates_customer_idx ON estimates(customer_id)`,
+  `CREATE INDEX IF NOT EXISTS estimates_status_idx ON estimates(status)`,
+  `CREATE INDEX IF NOT EXISTS estimate_lines_estimate_idx ON estimate_lines(estimate_id)`,
+  `CREATE INDEX IF NOT EXISTS invoices_customer_idx ON invoices(customer_id)`,
+  `CREATE INDEX IF NOT EXISTS invoices_status_idx ON invoices(status)`,
+  `CREATE INDEX IF NOT EXISTS invoice_lines_invoice_idx ON invoice_lines(invoice_id)`,
+  `CREATE INDEX IF NOT EXISTS payments_invoice_idx ON payments(invoice_id)`,
+  `CREATE INDEX IF NOT EXISTS recurring_invoices_customer_idx ON recurring_invoices(customer_id)`,
+  `CREATE INDEX IF NOT EXISTS recurring_invoices_status_idx ON recurring_invoices(status)`,
+  `CREATE INDEX IF NOT EXISTS recurring_invoice_lines_recurring_idx ON recurring_invoice_lines(recurring_invoice_id)`
 ];
 
 // ── Execute ─────────────────────────────────────────────────────────────────

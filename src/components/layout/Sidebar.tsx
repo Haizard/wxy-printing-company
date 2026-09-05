@@ -20,6 +20,10 @@ import {
   Receipt,
   BookOpen,
   ChevronDown,
+  CreditCard,
+  FileSignature,
+  RefreshCw,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -83,6 +87,20 @@ const navGroups: NavGroup[] = [
       { to: "/price-rules", icon: DollarSign, label: "Price Rules", allowedRoles: ["admin"] },
       { to: "/signage-configs", icon: Settings, label: "Signage Configs", allowedRoles: ["admin"] },
       { to: "/signage-materials", icon: Package, label: "Signage Materials", allowedRoles: ["admin"] },
+    ],
+  },
+  {
+    id: "billing",
+    label: "Billing",
+    icon: CreditCard,
+    allowedRoles: ["admin", "sales"],
+    items: [
+      { to: "/customers", icon: Users, label: "Customers" },
+      { to: "/estimates", icon: FileSignature, label: "Estimates" },
+      { to: "/invoices", icon: FileText, label: "Invoices" },
+      { to: "/recurring-invoices", icon: RefreshCw, label: "Recurring Invoices" },
+      { to: "/statements", icon: ClipboardCheck, label: "Statements" },
+      { to: "/service-items", icon: Package, label: "Service Items" },
     ],
   },
   {

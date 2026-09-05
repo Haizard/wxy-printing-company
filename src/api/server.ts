@@ -31,9 +31,19 @@ import {
   signageMaterialCategories,
   signageMaterials,
   signageProductConfigs,
-  signageConfigMaterials} from "../db/schema";
+  signageConfigMaterials,
+  customerProfiles,
+  serviceItems,
+  estimates,
+  estimateLines,
+  invoices,
+  invoiceLines,
+  payments,
+  recurringInvoices,
+} from "../db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import authRoutes, { authMiddleware } from "./auth";
+import registerBillingRoutes from "./billing";
 
 const app = express();
 app.use(cors());
@@ -2321,6 +2331,8 @@ app.delete("/api/signage-configs/materials/:id", authMiddleware, async (req, res
     res.json({ success: true });
   } catch (error) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
+// Register billing / wave panel routes
+registerBillingRoutes(app, authMiddleware);
 
 
 // ── Start Server ────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -172,6 +173,9 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Billing Summary Widget */}
+      <BillingWidget />
+
       {/* Recent Jobs + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Recent Jobs */}
@@ -314,6 +318,31 @@ export default function DashboardPage() {
                   Messages
                 </Button>
               </Link>
+              {isAdmin && (
+                <>
+                  <div className="pt-2 border-t border-[rgba(60,60,67,0.1)]">
+                    <p className="text-caption text-[var(--text-tertiary)] mb-2 font-medium">Billing</p>
+                  </div>
+                  <Link to="/estimates">
+                    <Button className="w-full justify-start" variant="outline">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Estimates
+                    </Button>
+                  </Link>
+                  <Link to="/invoices">
+                    <Button className="w-full justify-start" variant="outline">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Invoices
+                    </Button>
+                  </Link>
+                  <Link to="/customers">
+                    <Button className="w-full justify-start" variant="outline">
+                      <Users className="w-4 h-4 mr-2" />
+                      Customers
+                    </Button>
+                  </Link>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -361,5 +390,84 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Billing Summary Widget ────────────────────────────────────────────────
+function BillingWidget() {
+  const [stats, setStats] = useState<{ totalInvoiced: number; totalPaid: number; outstanding: number; overdue: number; recentInvoices: any[] }>({ totalInvoiced: 0, totalPaid: 0, outstanding: 0, overdue: 0, recentInvoices: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("printhub_token");
+    const headers = { Authorization: `Bearer ${token || ""}` };
+    fetch("/api/invoices", { headers })
+      .then(r => r.json())
+      .then((invoices: any[]) => {
+        const totalInvoiced = invoices.reduce((s: number, i: any) => s + (i.total || 0), 0);
+        const totalPaid = invoices.reduce((s: number, i: any) => s + (i.amountPaid || 0), 0);
+        const outstanding = invoices.reduce((s: number, i: any) => s + Math.max(0, (i.total || 0) - (i.amountPaid || 0)), 0);
+        const overdue = invoices.filter((i: any) => i.status === "overdue").length;
+        setStats({ totalInvoiced, totalPaid, outstanding, overdue, recentInvoices: invoices.slice(0, 5) });
+      })
+      .catch(() => {}) // silently ignore if billing not set up
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || (stats.totalInvoiced === 0 && stats.recentInvoices.length === 0)) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.4 }}>
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[rgba(255,90,60,0.1)] flex items-center justify-center">
+                <DollarSign className="w-4 h-4 text-[var(--accent-primary)]" />
+              </div>
+              <h3 className="text-headline font-semibold">Billing Overview</h3>
+            </div>
+            <Link to="/invoices">
+              <Button size="sm" variant="ghost">
+                View All <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+              <p className="text-caption text-[var(--text-secondary)]">Total Invoiced</p>
+              <p className="text-subhead font-bold">{formatTZS(stats.totalInvoiced)}</p>
+            </div>
+            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+              <p className="text-caption text-[var(--text-secondary)]">Paid</p>
+              <p className="text-subhead font-bold text-green-600">{formatTZS(stats.totalPaid)}</p>
+            </div>
+            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+              <p className="text-caption text-[var(--text-secondary)]">Outstanding</p>
+              <p className="text-subhead font-bold text-amber-600">{formatTZS(stats.outstanding)}</p>
+            </div>
+            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+              <p className="text-caption text-[var(--text-secondary)]">Overdue</p>
+              <p className="text-subhead font-bold text-red-600">{stats.overdue}</p>
+            </div>
+          </div>
+          {stats.recentInvoices.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-[rgba(60,60,67,0.1)]">
+              <p className="text-caption text-[var(--text-tertiary)] mb-2">Recent Invoices</p>
+              <div className="space-y-1.5">
+                {stats.recentInvoices.map((inv: any) => (
+                  <div key={inv.id} className="flex items-center justify-between text-sm">
+                    <span className="text-[var(--text-primary)]">{inv.invoiceNumber}</span>
+                    <span className="text-[var(--text-secondary)]">{inv.customerName || "—"}</span>
+                    <span className="font-medium text-[var(--text-primary)]">{formatTZS(inv.total)}</span>
+                    <Badge variant={inv.status === "paid" ? "success" : inv.status === "overdue" ? "danger" : "secondary"}>{inv.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

@@ -19,6 +19,10 @@ import {
   LogOut,
   Truck,
   Receipt,
+  CreditCard,
+  FileSignature,
+  RefreshCw,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +55,11 @@ const moreItems: NavItem[] = [
   { to: "/signage-materials", icon: Package, label: "Materials", allowedRoles: ["admin"] },
   { to: "/projects", icon: FolderOpen, label: "Projects" },
   { to: "/messages", icon: Mail, label: "Contact Messages", allowedRoles: ["admin"] },
+  { to: "/customers", icon: Users, label: "Customers", allowedRoles: ["admin", "sales"] },
+  { to: "/estimates", icon: FileSignature, label: "Estimates", allowedRoles: ["admin", "sales"] },
+  { to: "/invoices", icon: CreditCard, label: "Invoices", allowedRoles: ["admin", "sales"] },
+  { to: "/recurring-invoices", icon: RefreshCw, label: "Recurring", allowedRoles: ["admin", "sales"] },
+  { to: "/statements", icon: ClipboardCheck, label: "Statements", allowedRoles: ["admin", "sales"] },
   { to: "/users", icon: Users, label: "Users", allowedRoles: ["admin"] },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

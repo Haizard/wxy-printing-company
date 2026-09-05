@@ -80,6 +80,31 @@ export const materialIssuanceStatusEnum = pgEnum("material_issuance_status", [
   "consumed",
 ]);
 
+export const estimateStatusEnum = pgEnum("estimate_status", [
+  "draft",
+  "sent",
+  "accepted",
+  "declined",
+  "expired",
+  "invoiced",
+]);
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "paid",
+  "partially_paid",
+  "overdue",
+  "cancelled",
+]);
+
+export const recurringStatusEnum = pgEnum("recurring_status", [
+  "active",
+  "paused",
+  "cancelled",
+]);
+
 // ── Users ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable(
@@ -700,6 +725,226 @@ export const signageConfigMaterials = pgTable(
   }),
 );
 
+// ── Customer Profiles (extends users for business details) ─────────────────
+
+export const customerProfiles = pgTable(
+  "customer_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id)
+      .unique(),
+    businessName: text("business_name"),
+    billingAddress: text("billing_address"),
+    shippingAddress: text("shipping_address"),
+    taxId: text("tax_id"),
+    paymentTerms: integer("payment_terms").default(30), // Net days
+    creditLimit: integer("credit_limit"),
+    currency: text("currency").default("TZS"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("customer_profiles_user_idx").on(table.userId),
+  }),
+);
+
+// ── Service Items (simplified products for invoicing) ────────────────────────
+
+export const serviceItems = pgTable(
+  "service_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    unitPrice: integer("unit_price").notNull().default(0),
+    costPrice: integer("cost_price").default(0),
+    taxRate: numeric("tax_rate").default("0"),
+    type: text("type").notNull().default("product"), // product | service | hourly
+    unit: text("unit").default("piece"),
+    isActive: boolean("is_active").default(true),
+    linkedProductId: uuid("linked_product_id").references(() => products.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    typeIdx: index("service_items_type_idx").on(table.type),
+  }),
+);
+
+// ── Estimates ───────────────────────────────────────────────────────────────
+
+export const estimates = pgTable(
+  "estimates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    estimateNumber: text("estimate_number").unique().notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => users.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    status: estimateStatusEnum("status").default("draft"),
+    validUntil: date("valid_until"),
+    subtotal: integer("subtotal").notNull().default(0),
+    taxTotal: integer("tax_total").default(0),
+    total: integer("total").notNull().default(0),
+    notes: text("notes"),
+    terms: text("terms"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    customerIdx: index("estimates_customer_idx").on(table.customerId),
+    statusIdx: index("estimates_status_idx").on(table.status),
+  }),
+);
+
+export const estimateLines = pgTable(
+  "estimate_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    estimateId: uuid("estimate_id")
+      .notNull()
+      .references(() => estimates.id),
+    serviceItemId: uuid("service_item_id").references(() => serviceItems.id),
+    productId: uuid("product_id").references(() => products.id),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    unitPrice: integer("unit_price").notNull().default(0),
+    taxRate: numeric("tax_rate").default("0"),
+    lineTotal: integer("line_total").notNull().default(0),
+    sortOrder: integer("sort_order").default(0),
+  },
+  (table) => ({
+    estimateIdx: index("estimate_lines_estimate_idx").on(table.estimateId),
+  }),
+);
+
+// ── Invoices ────────────────────────────────────────────────────────────────
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    invoiceNumber: text("invoice_number").unique().notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => users.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    estimateId: uuid("estimate_id").references(() => estimates.id),
+    orderId: uuid("order_id").references(() => orders.id),
+    quoteId: uuid("quote_id").references(() => quotes.id),
+    jobId: uuid("job_id").references(() => jobs.id),
+    status: invoiceStatusEnum("status").default("draft"),
+    subtotal: integer("subtotal").notNull().default(0),
+    taxTotal: integer("tax_total").default(0),
+    total: integer("total").notNull().default(0),
+    amountPaid: integer("amount_paid").default(0),
+    dueDate: date("due_date"),
+    paymentTerms: integer("payment_terms").default(30),
+    notes: text("notes"),
+    terms: text("terms"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    customerIdx: index("invoices_customer_idx").on(table.customerId),
+    statusIdx: index("invoices_status_idx").on(table.status),
+  }),
+);
+
+export const invoiceLines = pgTable(
+  "invoice_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id),
+    serviceItemId: uuid("service_item_id").references(() => serviceItems.id),
+    productId: uuid("product_id").references(() => products.id),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    unitPrice: integer("unit_price").notNull().default(0),
+    taxRate: numeric("tax_rate").default("0"),
+    lineTotal: integer("line_total").notNull().default(0),
+    sortOrder: integer("sort_order").default(0),
+  },
+  (table) => ({
+    invoiceIdx: index("invoice_lines_invoice_idx").on(table.invoiceId),
+  }),
+);
+
+// ── Payments ────────────────────────────────────────────────────────────────
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id),
+    amount: integer("amount").notNull(),
+    paymentMethod: text("payment_method").default("cash"), // cash | mobile_money | bank_transfer | card | other
+    paymentDate: timestamp("payment_date").defaultNow(),
+    reference: text("reference"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    invoiceIdx: index("payments_invoice_idx").on(table.invoiceId),
+  }),
+);
+
+// ── Recurring Invoices ──────────────────────────────────────────────────────
+
+export const recurringInvoices = pgTable(
+  "recurring_invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => users.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    frequency: text("frequency").notNull().default("monthly"), // weekly | biweekly | monthly | quarterly | yearly
+    subtotal: integer("subtotal").notNull().default(0),
+    taxTotal: integer("tax_total").default(0),
+    total: integer("total").notNull().default(0),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date"),
+    nextDueDate: date("next_due_date").notNull(),
+    lastInvoiceDate: date("last_invoice_date"),
+    status: recurringStatusEnum("status").default("active"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    customerIdx: index("recurring_invoices_customer_idx").on(table.customerId),
+    statusIdx: index("recurring_invoices_status_idx").on(table.status),
+  }),
+);
+
+// ── Recurring Invoice Lines ────────────────────────────────────────────────
+
+export const recurringInvoiceLines = pgTable(
+  "recurring_invoice_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recurringInvoiceId: uuid("recurring_invoice_id")
+      .notNull()
+      .references(() => recurringInvoices.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    unitPrice: integer("unit_price").notNull().default(0),
+    taxRate: numeric("tax_rate").default("0"),
+    lineTotal: integer("line_total").notNull().default(0),
+    sortOrder: integer("sort_order").default(0),
+  },
+  (table) => ({
+    recurringIdx: index("recurring_invoice_lines_recurring_idx").on(table.recurringInvoiceId),
+  }),
+);
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -785,6 +1030,44 @@ export const materialIssuancesRelations = relations(materialIssuances, ({ one })
   }),
   issuedByUser: one(users, {
     fields: [materialIssuances.issuedBy],
+    references: [users.id],
+  }),
+}));
+
+export const customerProfilesRelations = relations(customerProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [customerProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
+export const estimatesRelations = relations(estimates, ({ one, many }) => ({
+  customer: one(users, {
+    fields: [estimates.customerId],
+    references: [users.id],
+  }),
+  lines: many(estimateLines),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  customer: one(users, {
+    fields: [invoices.customerId],
+    references: [users.id],
+  }),
+  lines: many(invoiceLines),
+  payments: many(payments),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [payments.invoiceId],
+    references: [invoices.id],
+  }),
+}));
+
+export const recurringInvoicesRelations = relations(recurringInvoices, ({ one }) => ({
+  customer: one(users, {
+    fields: [recurringInvoices.customerId],
     references: [users.id],
   }),
 }));

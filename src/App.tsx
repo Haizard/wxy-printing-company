@@ -33,6 +33,12 @@ import ClientOrdersPage from "@/pages/ClientOrdersPage";
 import ClientDashboardPage from "@/pages/ClientDashboardPage";
 import SuppliersPage from "@/pages/SuppliersPage";
 import PurchaseOrdersPage from "@/pages/PurchaseOrdersPage";
+import CustomersPage from "@/pages/CustomersPage";
+import EstimatesPage from "@/pages/EstimatesPage";
+import InvoicesPage from "@/pages/InvoicesPage";
+import RecurringInvoicesPage from "@/pages/RecurringInvoicesPage";
+import StatementsPage from "@/pages/StatementsPage";
+import ServiceItemsPage from "@/pages/ServiceItemsPage";
 
 export default function App() {
   return (
@@ -79,6 +85,13 @@ export default function App() {
           <Route path="/messages" element={<RequireAuth allowedRoles={["admin"]}><ContactMessagesPage /></RequireAuth>} />
           <Route path="/suppliers" element={<RequireAuth allowedRoles={["admin", "inventory_manager"]}><SuppliersPage /></RequireAuth>} />
           <Route path="/purchase-orders" element={<RequireAuth allowedRoles={["admin", "inventory_manager"]}><PurchaseOrdersPage /></RequireAuth>} />
+          {/* Billing / Wave Panel */}
+          <Route path="/customers" element={<RequireAuth allowedRoles={["admin", "sales"]}><CustomersPage /></RequireAuth>} />
+          <Route path="/estimates" element={<RequireAuth allowedRoles={["admin", "sales"]}><EstimatesPage /></RequireAuth>} />
+          <Route path="/invoices" element={<RequireAuth allowedRoles={["admin", "sales"]}><InvoicesPage /></RequireAuth>} />
+          <Route path="/recurring-invoices" element={<RequireAuth allowedRoles={["admin", "sales"]}><RecurringInvoicesPage /></RequireAuth>} />
+          <Route path="/statements" element={<RequireAuth allowedRoles={["admin", "sales"]}><StatementsPage /></RequireAuth>} />
+          <Route path="/service-items" element={<RequireAuth allowedRoles={["admin", "sales"]}><ServiceItemsPage /></RequireAuth>} />
         </Route>
 
         {/* Client area — only for registered customers, no admin panel access */}

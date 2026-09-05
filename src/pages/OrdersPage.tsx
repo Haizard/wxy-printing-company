@@ -341,6 +341,25 @@ export default function OrdersPage() {
                               Reopen Order
                             </Button>
                           )}
+                          {canManage && order.status !== "cancelled" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const token = localStorage.getItem("printhub_token");
+                                const res = await fetch(`/api/orders/${order.id}/generate-invoice`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                  body: JSON.stringify({ paymentTerms: 30 }),
+                                });
+                                if (res.ok) { toast({ title: "Invoice generated from order" }); refetch(); }
+                                else { const err = await res.json(); toast({ title: err.error || "Failed", variant: "destructive" }); }
+                              }}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Generate Invoice
+                            </Button>
+                          )}
                           {order.status === "paid" && (
                             <p className="text-caption text-green-600 font-medium">
                               ✓ Payment complete — no further actions needed.

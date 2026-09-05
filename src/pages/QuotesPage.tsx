@@ -71,6 +71,29 @@ export default function QuotesPage() {
     }
   };
 
+  const [convertingEstimate, setConvertingEstimate] = useState<string | null>(null);
+  const handleConvertToEstimate = async (quoteId: string) => {
+    setConvertingEstimate(quoteId);
+    try {
+      const token = localStorage.getItem("printhub_token");
+      const response = await fetch(`/api/quotes/${quoteId}/convert-to-estimate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (response.ok) {
+        toast({ title: "Estimate created!", description: "Quote has been converted to an estimate" });
+        refetch();
+      } else {
+        const data = await response.json();
+        toast({ title: data.error || "Conversion failed", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Conversion failed", variant: "destructive" });
+    } finally {
+      setConvertingEstimate(null);
+    }
+  };
+
   const handleDeleteQuote = async (quoteId: string) => {
     if (!confirm("Delete this quote? This cannot be undone.")) return;
     setDeleting(quoteId);
