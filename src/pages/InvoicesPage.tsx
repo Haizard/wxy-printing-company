@@ -40,7 +40,7 @@ export default function InvoicesPage() {
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [serviceItems, setServiceItems] = useState<any[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -63,11 +63,11 @@ export default function InvoicesPage() {
       const [invRes, custRes, svcRes] = await Promise.all([
         fetch("/api/invoices", { headers: getAuthHeaders() }),
         fetch("/api/customer-profiles", { headers: getAuthHeaders() }),
-        fetch("/api/service-items", { headers: getAuthHeaders() }),
+        fetch("/api/billing-products", { headers: getAuthHeaders() }),
       ]);
       if (invRes.ok) setInvoices(await invRes.json());
       if (custRes.ok) setCustomers(await custRes.json());
-      if (svcRes.ok) setServiceItems(await svcRes.json());
+      if (svcRes.ok) setCatalogProducts(await svcRes.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -80,7 +80,7 @@ export default function InvoicesPage() {
     setForm({
       customerId: filterCustomer || "", estimateId: "", dueDate: dueDate.toISOString().split("T")[0],
       paymentTerms: 30, notes: "", terms: "Payment due within 30 days of invoice date",
-      lines: [{ description: "", quantity: 1, unitPrice: 0, taxRate: "0", serviceItemId: "" }],
+      lines: [{ description: "", quantity: 1, unitPrice: 0, taxRate: "0", productId: "" }],
     });
     setDialogOpen(true);
   };
@@ -91,7 +91,7 @@ export default function InvoicesPage() {
       customerId: inv.customerId, estimateId: inv.estimateId || "",
       dueDate: inv.dueDate?.split("T")[0] || "", paymentTerms: inv.paymentTerms || 30,
       notes: inv.notes || "", terms: inv.terms || "",
-      lines: inv.lines?.length > 0 ? inv.lines.map((l: any) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate || "0", serviceItemId: l.serviceItemId || "" })) : [{ description: "", quantity: 1, unitPrice: 0, taxRate: "0", serviceItemId: "" }],
+      lines: inv.lines?.length > 0 ? inv.lines.map((l: any) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate || "0", productId: l.productId || l.serviceItemId || "" })) : [{ description: "", quantity: 1, unitPrice: 0, taxRate: "0", productId: "" }],
     });
     setDialogOpen(true);
   };
@@ -121,14 +121,14 @@ export default function InvoicesPage() {
     toast({ title: "Deleted" }); fetchAll();
   };
 
-  const addLine = () => setForm({ ...form, lines: [...form.lines, { description: "", quantity: 1, unitPrice: 0, taxRate: "0", serviceItemId: "" }] });
+  const addLine = () => setForm({ ...form, lines: [...form.lines, { description: "", quantity: 1, unitPrice: 0, taxRate: "0", productId: "" }] });
   const removeLine = (i: number) => setForm({ ...form, lines: form.lines.filter((_, idx) => idx !== i) });
   const updateLine = (i: number, field: string, value: any) => {
     const newLines = [...form.lines];
     newLines[i] = { ...newLines[i], [field]: value };
-    if (field === "serviceItemId" && value) {
-      const svc = serviceItems.find((s: any) => s.id === value);
-      if (svc) { newLines[i].description = svc.name; newLines[i].unitPrice = svc.unitPrice; newLines[i].taxRate = svc.taxRate || "0"; }
+    if (field === "productId" && value) {
+      const prod = catalogProducts.find((p: any) => p.id === value);
+      if (prod) { newLines[i].description = prod.name; newLines[i].taxRate = "0"; }
     }
     setForm({ ...form, lines: newLines });
   };
@@ -288,10 +288,10 @@ export default function InvoicesPage() {
                 <div key={i} className="grid grid-cols-[1fr_60px_100px_80px_40px] gap-2 items-end">
                   <div className="space-y-1">
                     {i === 0 && <span className="text-caption text-[var(--text-tertiary)]">Description</span>}
-                    <Select value={line.serviceItemId || ""} onValueChange={v => updateLine(i, "serviceItemId", v)}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Service/Item" /></SelectTrigger>
+                    <Select value={line.productId || ""} onValueChange={v => updateLine(i, "productId", v)}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select product" /></SelectTrigger>
                       <SelectContent>
-                        {serviceItems.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        {catalogProducts.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}{p.categoryName ? ` (${p.categoryName})` : ""}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="Description" className="h-9" />

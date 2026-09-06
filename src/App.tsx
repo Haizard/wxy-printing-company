@@ -38,7 +38,6 @@ import EstimatesPage from "@/pages/EstimatesPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import RecurringInvoicesPage from "@/pages/RecurringInvoicesPage";
 import StatementsPage from "@/pages/StatementsPage";
-import ServiceItemsPage from "@/pages/ServiceItemsPage";
 
 export default function App() {
   return (
@@ -91,7 +90,6 @@ export default function App() {
           <Route path="/invoices" element={<RequireAuth allowedRoles={["admin", "sales"]}><InvoicesPage /></RequireAuth>} />
           <Route path="/recurring-invoices" element={<RequireAuth allowedRoles={["admin", "sales"]}><RecurringInvoicesPage /></RequireAuth>} />
           <Route path="/statements" element={<RequireAuth allowedRoles={["admin", "sales"]}><StatementsPage /></RequireAuth>} />
-          <Route path="/service-items" element={<RequireAuth allowedRoles={["admin", "sales"]}><ServiceItemsPage /></RequireAuth>} />
         </Route>
 
         {/* Client area — only for registered customers, no admin panel access */}

@@ -100,7 +100,7 @@ const navGroups: NavGroup[] = [
       { to: "/invoices", icon: FileText, label: "Invoices" },
       { to: "/recurring-invoices", icon: RefreshCw, label: "Recurring Invoices" },
       { to: "/statements", icon: ClipboardCheck, label: "Statements" },
-      { to: "/service-items", icon: Package, label: "Service Items" },
+
     ],
   },
   {

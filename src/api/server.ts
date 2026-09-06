@@ -44,6 +44,7 @@ import {
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import authRoutes, { authMiddleware } from "./auth";
 import registerBillingRoutes from "./billing";
+import registerBillingProductsRoute from "./billing-products";
 
 const app = express();
 app.use(cors());
@@ -2333,6 +2334,7 @@ app.delete("/api/signage-configs/materials/:id", authMiddleware, async (req, res
 });
 // Register billing / wave panel routes
 registerBillingRoutes(app, authMiddleware);
+registerBillingProductsRoute(app, authMiddleware);
 
 
 // ── Start Server ────────────────────────────────────────────────────────────

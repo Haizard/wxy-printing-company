@@ -74,6 +74,7 @@ export default function RecurringInvoicesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<RecurringInvoice | null>(null);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<{ id: string; name: string; categoryName?: string }[]>([]);
   const [formData, setFormData] = useState({
     customerId: "",
     frequency: "monthly" as string,
@@ -85,6 +86,7 @@ export default function RecurringInvoicesPage() {
   useEffect(() => {
     fetchRecurringInvoices();
     fetchCustomers();
+    fetchCatalogProducts();
   }, []);
 
   const fetchRecurringInvoices = async () => {
@@ -111,6 +113,18 @@ export default function RecurringInvoicesPage() {
       setCustomers(profiles.map((c: any) => ({ id: c.userId, name: c.userName || c.businessName || "Unknown" })));
     } catch (error) {
       console.error("Failed to fetch customers:", error);
+    }
+  };
+
+  const fetchCatalogProducts = async () => {
+    try {
+      const res = await fetch("/api/billing-products", {
+        headers: { Authorization: `Bearer ${user?.id || ""}` },
+      });
+      const data = await res.json();
+      setCatalogProducts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch catalog products:", error);
     }
   };
 
@@ -258,15 +272,19 @@ export default function RecurringInvoicesPage() {
   const addLine = () => {
     setFormData((prev) => ({
       ...prev,
-      lines: [...prev.lines, { description: "", quantity: 1, unitPrice: 0 }],
+      lines: [...prev.lines, { description: "", quantity: 1, unitPrice: 0, productId: "" }],
     }));
   };
 
   const updateLine = (index: number, field: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      lines: prev.lines.map((l, i) => (i === index ? { ...l, [field]: value } : l)),
-    }));
+    setFormData((prev) => {
+      const newLines = prev.lines.map((l, i) => (i === index ? { ...l, [field]: value } : l));
+      if (field === "productId" && value) {
+        const prod = catalogProducts.find((p) => p.id === value);
+        if (prod) { newLines[index] = { ...newLines[index], description: prod.name }; }
+      }
+      return { ...prev, lines: newLines };
+    });
   };
 
   const removeLine = (index: number) => {
@@ -618,6 +636,18 @@ export default function RecurringInvoicesPage() {
                   </label>
                   {formData.lines.map((line, idx) => (
                     <div key={idx} className="flex gap-2 mb-2">
+                      <select
+                        value={(line as any).productId || ""}
+                        onChange={(e) => updateLine(idx, "productId", e.target.value)}
+                        className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                      >
+                        <option value="">Select product…</option>
+                        {catalogProducts.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}{p.categoryName ? ` (${p.categoryName})` : ""}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         type="text"
                         placeholder="Description"
