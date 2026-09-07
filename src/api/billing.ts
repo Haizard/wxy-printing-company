@@ -63,6 +63,48 @@ export default function registerBillingRoutes(app: any, authMiddleware: any) {
     } catch (error: any) { console.error("Create customer profile error:", error); res.status(500).json({ error: error.message || "Failed" }); }
   });
 
+  // Create a new customer user + profile in one step
+  app.post("/api/customer-profiles/create-customer", authMiddleware, async (req: any, res: any) => {
+    try {
+      const { fullName, email, phone, businessName, billingAddress, shippingAddress, taxId, paymentTerms, creditLimit, currency, notes } = req.body;
+      if (!fullName) return res.status(400).json({ error: "Full name is required" });
+      if (!email && !phone) return res.status(400).json({ error: "Email or phone is required" });
+      // Check for duplicate email/phone
+      if (email) {
+        const [emailExists] = await db.select().from(users).where(eq(users.email, email));
+        if (emailExists) return res.status(409).json({ error: "A user with this email already exists" });
+      }
+      if (phone) {
+        const [phoneExists] = await db.select().from(users).where(eq(users.phone, phone));
+        if (phoneExists) return res.status(409).json({ error: "A user with this phone already exists" });
+      }
+      // Create the user with role "customer"
+      const [newUser] = await db.insert(users).values({
+        fullName,
+        email: email || null,
+        phone: phone || null,
+        role: "customer",
+        isActive: true,
+      }).returning();
+      // Create the billing profile linked to the new user
+      const [profile] = await db.insert(customerProfiles).values({
+        userId: newUser.id,
+        businessName: businessName || fullName,
+        billingAddress: billingAddress || "",
+        shippingAddress: shippingAddress || "",
+        taxId: taxId || null,
+        paymentTerms: paymentTerms || 30,
+        creditLimit: creditLimit || 0,
+        currency: currency || "TZS",
+        notes: notes || null,
+      }).returning();
+      res.status(201).json({ user: { id: newUser.id, fullName: newUser.fullName, email: newUser.email, phone: newUser.phone }, profile });
+    } catch (error: any) {
+      console.error("Create customer error:", error);
+      res.status(500).json({ error: error.message || "Failed to create customer" });
+    }
+  });
+
   app.put("/api/customer-profiles/:id", authMiddleware, async (req: any, res: any) => {
     try {
       const { businessName, billingAddress, shippingAddress, taxId, paymentTerms, creditLimit, currency, notes } = req.body;

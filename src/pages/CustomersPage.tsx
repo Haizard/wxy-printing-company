@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Users, Plus, Pencil, Trash2, Building2, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Building2, Phone, Mail, MapPin, FileText, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,9 +33,19 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [billingStats, setBillingStats] = useState<Record<string, { invoiced: number; paid: number; outstanding: number }>>({});
+
+  // "link" = link to existing user, "new" = create new user + profile
+  const [createMode, setCreateMode] = useState<"link" | "new">("new");
+
+  // Profile form fields
   const [form, setForm] = useState({
     userId: "", businessName: "", billingAddress: "", shippingAddress: "",
     taxId: "", paymentTerms: 30, creditLimit: 0, currency: "TZS", notes: "",
+  });
+
+  // New customer fields (only used in "new" mode)
+  const [newCustomer, setNewCustomer] = useState({
+    fullName: "", email: "", phone: "",
   });
 
   const fetchAll = async () => {
@@ -68,28 +78,49 @@ export default function CustomersPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setCreateMode("new");
     setForm({ userId: "", businessName: "", billingAddress: "", shippingAddress: "", taxId: "", paymentTerms: 30, creditLimit: 0, currency: "TZS", notes: "" });
+    setNewCustomer({ fullName: "", email: "", phone: "" });
     setDialogOpen(true);
   };
 
   const openEdit = (profile: any) => {
     setEditing(profile);
+    setCreateMode("link");
     setForm({
       userId: profile.userId, businessName: profile.businessName || "",
       billingAddress: profile.billingAddress || "", shippingAddress: profile.shippingAddress || "",
       taxId: profile.taxId || "", paymentTerms: profile.paymentTerms || 30,
       creditLimit: profile.creditLimit || 0, currency: profile.currency || "TZS", notes: profile.notes || "",
     });
+    setNewCustomer({ fullName: "", email: "", phone: "" });
     setDialogOpen(true);
   };
 
   const save = async () => {
-    if (!form.userId && !editing) { toast({ title: "Select a customer", variant: "destructive" }); return; }
-    const url = editing ? `/api/customer-profiles/${editing.id}` : "/api/customer-profiles";
-    const method = editing ? "PUT" : "POST";
-    const res = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(form) });
-    if (res.ok) { toast({ title: editing ? "Updated" : "Created" }); setDialogOpen(false); fetchAll(); }
-    else { const err = await res.json(); toast({ title: err.error || "Failed", variant: "destructive" }); }
+    if (editing) {
+      // Edit mode: update existing profile
+      const url = `/api/customer-profiles/${editing.id}`;
+      const res = await fetch(url, { method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(form) });
+      if (res.ok) { toast({ title: "Updated" }); setDialogOpen(false); fetchAll(); }
+      else { const err = await res.json(); toast({ title: err.error || "Failed", variant: "destructive" }); }
+    } else if (createMode === "new") {
+      // Create new customer: user + profile in one step
+      if (!newCustomer.fullName.trim()) { toast({ title: "Full name is required", variant: "destructive" }); return; }
+      if (!newCustomer.email.trim() && !newCustomer.phone.trim()) { toast({ title: "Email or phone is required", variant: "destructive" }); return; }
+      const res = await fetch("/api/customer-profiles/create-customer", {
+        method: "POST", headers: getAuthHeaders(),
+        body: JSON.stringify({ ...newCustomer, ...form }),
+      });
+      if (res.ok) { toast({ title: "Customer created" }); setDialogOpen(false); fetchAll(); }
+      else { const err = await res.json(); toast({ title: err.error || "Failed", variant: "destructive" }); }
+    } else {
+      // Link mode: create profile for existing user
+      if (!form.userId) { toast({ title: "Select a customer", variant: "destructive" }); return; }
+      const res = await fetch("/api/customer-profiles", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(form) });
+      if (res.ok) { toast({ title: "Profile created" }); setDialogOpen(false); fetchAll(); }
+      else { const err = await res.json(); toast({ title: err.error || "Failed", variant: "destructive" }); }
+    }
   };
 
   const deleteProfile = async (id: string) => {
@@ -111,7 +142,7 @@ export default function CustomersPage() {
             <p className="text-body text-[var(--text-secondary)] mt-1">Manage customer profiles and billing details</p>
           </div>
           {isAdmin && (
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Profile</Button>
+            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Customer</Button>
           )}
         </div>
       </motion.div>
@@ -146,6 +177,9 @@ export default function CustomersPage() {
             <Users className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3" />
             <p className="text-subhead text-[var(--text-tertiary)]">No customer profiles yet</p>
             <p className="text-caption text-[var(--text-tertiary)] mt-1">Add billing profiles for your customers</p>
+            {isAdmin && (
+              <Button className="mt-4" onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Create First Customer</Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -220,7 +254,7 @@ export default function CustomersPage() {
                     <p className="text-caption text-[var(--text-tertiary)]">{u.email || u.phone}</p>
                   </div>
                   {isAdmin && (
-                    <Button size="sm" variant="outline" onClick={() => { setForm({ ...form, userId: u.id, businessName: u.fullName }); setEditing(null); setDialogOpen(true); }}>
+                    <Button size="sm" variant="outline" onClick={() => { setCreateMode("link"); setForm({ ...form, userId: u.id, businessName: u.fullName }); setEditing(null); setDialogOpen(true); }}>
                       <Plus className="w-3 h-3 mr-1" /> Create Profile
                     </Button>
                   )}
@@ -233,30 +267,77 @@ export default function CustomersPage() {
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editing ? "Edit Customer Profile" : "New Customer Profile"}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit Customer" : "Add Customer"}</DialogTitle>
+          </DialogHeader>
+
+          {/* Mode tabs (only when creating, not editing) */}
+          {!editing && (
+            <div className="flex gap-2 p-1 rounded-[var(--radius-md)] bg-[var(--glass-fill-subtle)]">
+              <button
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius-sm)] text-subhead font-medium transition-all ${createMode === "new" ? "bg-[var(--accent-primary)] text-white shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                onClick={() => setCreateMode("new")}
+              >
+                <UserPlus className="w-4 h-4" /> New Customer
+              </button>
+              <button
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius-sm)] text-subhead font-medium transition-all ${createMode === "link" ? "bg-[var(--accent-primary)] text-white shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                onClick={() => setCreateMode("link")}
+              >
+                <Users className="w-4 h-4" /> Link Existing
+              </button>
+            </div>
+          )}
+
           <div className="space-y-4">
-            {!editing && (
+            {/* New Customer fields */}
+            {!editing && createMode === "new" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Full Name *</Label>
+                  <Input value={newCustomer.fullName} onChange={e => setNewCustomer({ ...newCustomer, fullName: e.target.value })} placeholder="Customer name" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })} placeholder="email@example.com" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Phone</Label>
+                    <Input value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} placeholder="+255..." />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Link Existing user selector */}
+            {!editing && createMode === "link" && (
               <div className="space-y-2">
                 <Label>Customer User</Label>
                 <Select value={form.userId} onValueChange={v => setForm({ ...form, userId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select a registered customer" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={unlinkedUsers.length === 0 ? "No unlinked customers available" : "Select a registered customer"} /></SelectTrigger>
                   <SelectContent>
+                    {unlinkedUsers.length === 0 && (
+                      <SelectItem value="none" disabled>No unlinked customers — create a new one above</SelectItem>
+                    )}
                     {unlinkedUsers.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.email || u.phone})</SelectItem>
                     ))}
-                    {users.filter(u => customerUserIds.has(u.id)).length > 0 && (
-                      <>
-                        <SelectItem value="separator" disabled>── Already have profiles ──</SelectItem>
-                        {users.filter(u => customerUserIds.has(u.id)).map((u: any) => (
-                          <SelectItem key={u.id} value={u.id} disabled>{u.fullName} (has profile)</SelectItem>
-                        ))}
-                      </>
-                    )}
                   </SelectContent>
                 </Select>
+                {unlinkedUsers.length === 0 && (
+                  <p className="text-caption text-[var(--accent-primary)]">
+                    All registered customers already have profiles. Use "New Customer" to create one.
+                  </p>
+                )}
               </div>
             )}
+
+            {/* Business profile fields (always shown) */}
+            <div className="pt-2 border-t border-[rgba(60,60,67,0.1)]">
+              <p className="text-caption text-[var(--text-tertiary)] mb-3 font-medium uppercase tracking-wide">Billing Details</p>
+            </div>
             <div className="space-y-2">
               <Label>Business Name</Label>
               <Input value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} placeholder="Company name" />
@@ -283,7 +364,7 @@ export default function CustomersPage() {
               <Label>Notes</Label>
               <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="glass-input w-full min-h-[60px] text-subhead" placeholder="Internal notes" />
             </div>
-            <Button className="w-full" onClick={save}>{editing ? "Update" : "Create Profile"}</Button>
+            <Button className="w-full" onClick={save}>{editing ? "Update" : createMode === "new" ? "Create Customer" : "Create Profile"}</Button>
           </div>
         </DialogContent>
       </Dialog>
