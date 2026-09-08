@@ -1,5 +1,5 @@
 // One-time data copy: moves every row from the current (old) database into a
-// brand-new Luceris database, preserving IDs and relationships.
+// brand-new database, preserving IDs and relationships.
 //
 // Usage:
 //   SOURCE_DATABASE_URL=<old-db-url> NEW_DATABASE_URL=<new-db-url> bun run scripts/copy-db.ts
@@ -42,6 +42,7 @@ const TABLES: [string, any][] = [
   ["job_files", schema.jobFiles],
   ["inventory_items", schema.inventoryItems],
   ["inventory_movements", schema.inventoryMovements],
+  ["material_categories", schema.materialCategories],
   ["suppliers", schema.suppliers],
   ["purchase_orders", schema.purchaseOrders],
   ["purchase_order_items", schema.purchaseOrderItems],
@@ -49,6 +50,21 @@ const TABLES: [string, any][] = [
   ["chat_threads", schema.chatThreads],
   ["chat_messages", schema.chatMessages],
   ["contact_messages", schema.contactMessages],
+  // ── Signage tables ──────────────────────────────────────────────────────
+  ["signage_material_categories", schema.signageMaterialCategories],
+  ["signage_materials", schema.signageMaterials],
+  ["signage_product_configs", schema.signageProductConfigs],
+  ["signage_config_materials", schema.signageConfigMaterials],
+  // ── Billing / Wave Panel tables ─────────────────────────────────────────
+  ["customer_profiles", schema.customerProfiles],
+  ["service_items", schema.serviceItems],
+  ["estimates", schema.estimates],
+  ["estimate_lines", schema.estimateLines],
+  ["invoices", schema.invoices],
+  ["invoice_lines", schema.invoiceLines],
+  ["payments", schema.payments],
+  ["recurring_invoices", schema.recurringInvoices],
+  ["recurring_invoice_lines", schema.recurringInvoiceLines],
 ];
 
 const BATCH = 200;
@@ -67,7 +83,7 @@ async function main() {
   }
   if (!targetUrl) {
     console.error(
-      "NEW_DATABASE_URL is not set. Add the new Luceris database connection string and re-run:\n" +
+      "NEW_DATABASE_URL is not set. Add the new database connection string and re-run:\n" +
         "  bun run scripts/copy-db.ts\n" +
         "(set it in Settings → Environment as NEW_DATABASE_URL, or pass it inline.)",
     );
