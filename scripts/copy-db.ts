@@ -3,15 +3,19 @@
 //
 // Usage:
 //   SOURCE_DATABASE_URL=<old-db-url> NEW_DATABASE_URL=<new-db-url> bun run scripts/copy-db.ts
+//   SOURCE_DATABASE_URL=<old-db-url> NEW_DATABASE_URL=<new-db-url> bun run scripts/copy-db.ts --force
 //
 // SOURCE_DATABASE_URL defaults to DATABASE_URL (the sandbox/dev connection,
 // which currently points at the old database that holds your live data).
+//
+// --force: If the target already has data, truncate all tables before copying.
+//          Use this for re-runs or when the target has partial data.
 //
 // What it does:
 //   1. Connects to both databases (max 1 connection each — light on the old DB).
 //   2. Migrates the target with the same idempotent schema bootstrap used by
 //      the Vercel build, so a fresh DB gets every table/enum/index first.
-//   3. Aborts if the target already contains rows (never double-copy).
+//   3. If --force: truncates all tables before copying. Otherwise aborts if target has data.
 //   4. Copies tables in foreign-key-safe order through drizzle (the same
 //      serializer the app uses), batching inserts; categories are inserted
 //      parents-first to satisfy their self-referencing FK.
@@ -19,14 +23,14 @@
 // Connection strings are never printed.
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { count } from "drizzle-orm";
+import { count, sql } from "drizzle-orm";
 import { ensureSchemaWith } from "../src/db/bootstrap";
 import * as schema from "../src/db/schema";
 
 // Foreign-key-safe copy order (dependencies first).
 const TABLES: [string, any][] = [
   ["users", schema.users],
-  ["categories", schema.categories], // self-referencing parent_id — handled topologically
+  ["categories", schema.categories],
   ["products", schema.products],
   ["product_options", schema.productOptions],
   ["product_option_values", schema.productOptionValues],
@@ -50,12 +54,10 @@ const TABLES: [string, any][] = [
   ["chat_threads", schema.chatThreads],
   ["chat_messages", schema.chatMessages],
   ["contact_messages", schema.contactMessages],
-  // ── Signage tables ──────────────────────────────────────────────────────
   ["signage_material_categories", schema.signageMaterialCategories],
   ["signage_materials", schema.signageMaterials],
   ["signage_product_configs", schema.signageProductConfigs],
   ["signage_config_materials", schema.signageConfigMaterials],
-  // ── Billing / Wave Panel tables ─────────────────────────────────────────
   ["customer_profiles", schema.customerProfiles],
   ["service_items", schema.serviceItems],
   ["estimates", schema.estimates],
@@ -68,6 +70,7 @@ const TABLES: [string, any][] = [
 ];
 
 const BATCH = 200;
+const FORCE = process.argv.includes("--force");
 
 function fail(message: string): never {
   console.error(`❌ ${message}`);
@@ -115,10 +118,29 @@ async function main() {
   await ensureSchemaWith(targetDb);
   console.log("  ✅ Target schema up to date");
 
-  // 3. Never copy into a database that already has data.
+  // 3. Check if target already has data.
   const [existingUsers] = await targetDb.select({ n: count() }).from(schema.users);
-  if ((existingUsers?.n ?? 0) > 0) {
-    fail("Target database already has users — aborting to avoid duplicates. Point NEW_DATABASE_URL at a truly empty database.");
+  const hasExistingData = (existingUsers?.n ?? 0) > 0;
+
+  if (hasExistingData && !FORCE) {
+    fail("Target database already has users — aborting to avoid duplicates.\n  Run with --force to truncate and re-copy.");
+  }
+
+  if (hasExistingData && FORCE) {
+    console.log("\n🗑  Target has existing data — truncating all tables (--force)…");
+    // Truncate in reverse dependency order (foreign keys first)
+    const tableNames = TABLES.map(([name]) => name).reverse();
+    for (const tableName of tableNames) {
+      try {
+        await targetDb.execute(sql.raw(`TRUNCATE TABLE "${tableName}" CASCADE`));
+      } catch (err: any) {
+        // Ignore errors on tables that don't exist yet
+        if (!err?.message?.includes("does not exist")) {
+          console.warn(`  ⚠ truncate ${tableName}: ${err?.message || err}`);
+        }
+      }
+    }
+    console.log("  ✅ Tables truncated");
   }
 
   // 4. Copy each table.
@@ -159,7 +181,7 @@ async function main() {
         const ready = remaining.filter(
           (r) => r.parentId === null || r.parentId === undefined || copiedIds.has(r.parentId),
         );
-        if (ready.length === 0) break; // orphans/cycles — reported below
+        if (ready.length === 0) break;
         const readyIds = new Set<string>(ready.map((r) => r.id));
         await insertChunk(tableName, tableSchema, ready);
         readyIds.forEach((id) => copiedIds.add(id));
