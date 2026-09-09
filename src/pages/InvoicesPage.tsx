@@ -41,6 +41,7 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [invoiceSettings, setInvoiceSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -60,14 +61,16 @@ export default function InvoicesPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [invRes, custRes, svcRes] = await Promise.all([
+      const [invRes, custRes, svcRes, settingsRes] = await Promise.all([
         fetch("/api/invoices", { headers: getAuthHeaders() }),
         fetch("/api/customer-profiles", { headers: getAuthHeaders() }),
         fetch("/api/billing-products", { headers: getAuthHeaders() }),
+        fetch("/api/invoice-settings", { headers: getAuthHeaders() }),
       ]);
       if (invRes.ok) setInvoices(await invRes.json());
       if (custRes.ok) setCustomers(await custRes.json());
       if (svcRes.ok) setCatalogProducts(await svcRes.json());
+      if (settingsRes.ok) setInvoiceSettings(await settingsRes.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -259,6 +262,7 @@ export default function InvoicesPage() {
                           amountPaid: inv.amountPaid || 0,
                           notes: inv.notes,
                           terms: inv.terms,
+                          settings: invoiceSettings,
                         })} title="Download PDF"><Download className="w-3 h-3" /></Button>
                         <Button size="sm" variant="ghost" onClick={() => printInvoice({
                           invoiceNumber: inv.invoiceNumber,
@@ -274,6 +278,7 @@ export default function InvoicesPage() {
                           amountPaid: inv.amountPaid || 0,
                           notes: inv.notes,
                           terms: inv.terms,
+                          settings: invoiceSettings,
                         })} title="Print Receipt"><Printer className="w-3 h-3" /></Button>
                         {isAdmin && <Button size="sm" variant="ghost" onClick={() => openEdit(inv)}><Pencil className="w-3 h-3" /></Button>}
                         {isAdmin && <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteInvoice(inv.id)}><Trash2 className="w-3 h-3" /></Button>}
@@ -417,6 +422,7 @@ export default function InvoicesPage() {
                     amountPaid: detailInvoice.amountPaid || 0,
                     notes: detailInvoice.notes,
                     terms: detailInvoice.terms,
+                    settings: invoiceSettings,
                   })}><Download className="w-4 h-4 mr-1" /> Download PDF</Button>
                   <Button size="sm" variant="outline" onClick={() => printInvoice({
                     invoiceNumber: detailInvoice.invoiceNumber,
@@ -432,6 +438,7 @@ export default function InvoicesPage() {
                     amountPaid: detailInvoice.amountPaid || 0,
                     notes: detailInvoice.notes,
                     terms: detailInvoice.terms,
+                    settings: invoiceSettings,
                   })}><Printer className="w-4 h-4 mr-1" /> Print Receipt</Button>
                 </div>
               )}

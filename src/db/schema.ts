@@ -945,6 +945,33 @@ export const recurringInvoiceLines = pgTable(
   }),
 );
 
+// ── Invoice Template Settings ──────────────────────────────────────────────
+
+export const invoiceSettings = pgTable("invoice_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyName: text("company_name").default("WXY SOLUTIONS"),
+  companyTagline: text("company_tagline").default("DESIGN | PRINTING | BRANDING | 3D SIGNAGE"),
+  addressLine1: text("address_line_1").default("Dar Es Salaam Branch, Cocacola Road"),
+  addressLine2: text("address_line_2").default("Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe"),
+  addressCity: text("address_city").default("Arusha, Arusha"),
+  addressCountry: text("address_country").default("Tanzania, United Republic of"),
+  contactPhone: text("contact_phone").default("+255 764 713 056 | +255 746 589 376"),
+  contactEmail: text("contact_email"),
+  logoUrl: text("logo_url").default("/wxy-logo.svg"),
+  bankName: text("bank_name").default("NMB CLOCK TOWER"),
+  accountNumber: text("account_number").default("4081 0217 414"),
+  accountName: text("account_name").default("WXY SOLUTION INVESTMENTS"),
+  swiftCode: text("swift_code").default("NMIBTZTZ"),
+  bankCode: text("bank_code").default("016408"),
+  branchCode: text("branch_code").default("408"),
+  mpesaNumber: text("mpesa_number"),
+  defaultNotes: text("default_notes").default("Free Consultation at Your Business Premises if located within Arusha"),
+  thankYouMessage: text("thank_you_message").default("Thank you for the business"),
+  headerColorLeft: text("header_color_left").default("#ff0606"),
+  headerColorRight: text("header_color_right").default("#cc1f1f"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({

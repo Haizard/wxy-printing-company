@@ -226,6 +226,29 @@ export function formatDateTime(dateStr: string | null | undefined): string {
 
 // ── Single Invoice PDF (receipt-style) ────────────────────────────────────
 
+export interface InvoiceSettings {
+  companyName?: string;
+  companyTagline?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressCountry?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  logoUrl?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  swiftCode?: string;
+  bankCode?: string;
+  branchCode?: string;
+  mpesaNumber?: string;
+  defaultNotes?: string;
+  thankYouMessage?: string;
+  headerColorLeft?: string;
+  headerColorRight?: string;
+}
+
 export interface InvoicePDFData {
   invoiceNumber: string;
   customerName: string;
@@ -240,9 +263,11 @@ export interface InvoicePDFData {
   amountPaid: number;
   notes?: string;
   terms?: string;
+  settings?: InvoiceSettings;
 }
 
 export function generateInvoicePDF(invoice: InvoicePDFData) {
+  const s = invoice.settings || {};
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -251,31 +276,39 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   const contentWidth = pageWidth - ml - mr;
   let y = 8;
 
-  // ── Company Header ──
-  doc.setTextColor(0, 0, 0);
+  // Parse colors
+  const parseHex = (hex: string) => {
+    const h = hex.replace("#", "");
+    return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)];
+  };
+  const [cLr, cLg, cLb] = parseHex(s.headerColorLeft || "#ff0606");
+  const [cRr, cRg, cRb] = parseHex(s.headerColorRight || "#cc1f1f");
+
+  // ── Red header bar (two-tone) ──
+  doc.setFillColor(cLr, cLg, cLb);
+  doc.rect(0, 0, pageWidth / 2, 24, "F");
+  doc.setFillColor(cRr, cRg, cRb);
+  doc.rect(pageWidth / 2, 0, pageWidth / 2, 24, "F");
+
+  // Company name + address in white on red bar
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("WXY SOLUTIONS", ml, y + 4);
+  doc.setFontSize(14);
+  doc.text(s.companyName || "WXY SOLUTIONS", ml, 10);
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 85);
-  doc.text("Dar Es Salaam Branch, Cocacola Road", ml, y + 10);
-  doc.text("Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 14);
-  doc.text("Arusha, Arusha", ml, y + 18);
-  doc.text("Tanzania, United Republic of", ml, y + 22);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", ml, 16);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, 20);
 
-  // Contact info (right side)
+  // Contact info (right side, white on red)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Contact Information", pageWidth - mr, y + 4, { align: "right" });
+  doc.text("Contact Information", pageWidth - mr, 10, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(80, 80, 85);
-  doc.text("Mobile: +255 764 713 056 | +255 746 589 376", pageWidth - mr, y + 10, { align: "right" });
+  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, 16, { align: "right" });
 
-  y += 28;
+  y = 30;
 
   // ── "INVOICE" title + tagline ──
   doc.setTextColor(0, 0, 0);
@@ -286,7 +319,7 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100, 100, 105);
-  doc.text("DESIGN | PRINTING | BRANDING | 3D SIGNAGE", ml, y + 12);
+  doc.text(s.companyTagline || "DESIGN | PRINTING | BRANDING | 3D SIGNAGE", ml, y + 12);
 
   // ── Amount Due box (right) ──
   const boxX = pageWidth - mr - 55;
@@ -349,8 +382,8 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
     head,
     body,
     styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", font: "helvetica" },
-    headStyles: { fillColor: [240, 240, 245], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
-    alternateRowStyles: { fillColor: [250, 250, 252] },
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+    alternateRowStyles: { fillColor: [243, 244, 244] }, // #f3f4f4
     columnStyles: {
       0: { cellWidth: "auto" },
       1: { cellWidth: 25, halign: "center" },
@@ -379,7 +412,7 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.text("Amount Due (TZS):", totalsX, y);
   doc.text(`Sh${balance.toLocaleString("en-US")}.00`, pageWidth - mr, y, { align: "right" });
 
-  // ── Notes / Terms (bank details) ──
+  // ── Notes / Terms (bank details from settings) ──
   y += 16;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -391,18 +424,18 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFontSize(8);
   doc.setTextColor(60, 60, 65);
   const bankNotes = [
-    "Free Consultation at Your Business Premises if located within Arusha",
+    s.defaultNotes || "Free Consultation at Your Business Premises if located within Arusha",
     "",
     "All PAYMENTS Should be made through",
     "",
-    "NMB CLOCK TOWER",
-    "ACCOUNT NUMBER: 4081 0217 414",
-    "NAME: WXY SOLUTION INVESTMENTS",
-    "SWIFT CODE: NMIBTZTZ",
-    "BANK CODE: 016408",
-    "BRANCH CODE: 408",
+    s.bankName || "NMB CLOCK TOWER",
+    s.accountNumber ? `ACCOUNT NUMBER: ${s.accountNumber}` : "ACCOUNT NUMBER: 4081 0217 414",
+    s.accountName ? `NAME: ${s.accountName}` : "NAME: WXY SOLUTION INVESTMENTS",
+    s.swiftCode ? `SWIFT CODE: ${s.swiftCode}` : "SWIFT CODE: NMIBTZTZ",
+    s.bankCode ? `BANK CODE: ${s.bankCode}` : "BANK CODE: 016408",
+    s.branchCode ? `BRANCH CODE: ${s.branchCode}` : "BRANCH CODE: 408",
     "",
-    "M-PESA LIPA NUMBER",
+    s.mpesaNumber ? `M-PESA LIPA NUMBER: ${s.mpesaNumber}` : "M-PESA LIPA NUMBER",
   ];
   bankNotes.forEach((line) => {
     if (line) doc.text(line, ml, y);
@@ -428,28 +461,28 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFont("helvetica", "italic");
   doc.setFontSize(10);
   doc.setTextColor(60, 60, 65);
-  doc.text("Thank you for the business", pageWidth / 2, y, { align: "center" });
+  doc.text(s.thankYouMessage || "Thank you for the business", pageWidth / 2, y, { align: "center" });
 
   // ── Company details at bottom ──
   y += 12;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
-  doc.text("WXY SOLUTIONS", ml, y);
+  doc.text(s.companyName || "WXY SOLUTIONS", ml, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(80, 80, 85);
-  doc.text("Dar Es Salaam Branch, Cocacola Road", ml, y + 5);
-  doc.text("Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 10);
-  doc.text("Arusha, Arusha", ml, y + 15);
-  doc.text("Tanzania, United Republic of", ml, y + 20);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", ml, y + 5);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 10);
+  doc.text(s.addressCity || "Arusha, Arusha", ml, y + 15);
+  doc.text(s.addressCountry || "Tanzania, United Republic of", ml, y + 20);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.text("Contact Information", pageWidth - mr, y, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text("Mobile: +255 764 713 056 | +255 746 589 376", pageWidth - mr, y + 5, { align: "right" });
+  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, y + 5, { align: "right" });
 
   // ── Footer ──
   doc.setFontSize(7);
@@ -462,7 +495,28 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
 // ── Print Invoice as Receipt ───────────────────────────────────────────────
 
 export function printInvoice(invoice: InvoicePDFData) {
+  const s = invoice.settings || {};
   const balance = invoice.total - invoice.amountPaid;
+  const headerLeft = s.headerColorLeft || "#ff0606";
+  const headerRight = s.headerColorRight || "#cc1f1f";
+  const companyName = s.companyName || "WXY SOLUTIONS";
+  const addr1 = s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road";
+  const addr2 = s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe";
+  const addrCity = s.addressCity || "Arusha, Arusha";
+  const addrCountry = s.addressCountry || "Tanzania, United Republic of";
+  const phone = s.contactPhone || "+255 764 713 056 | +255 746 589 376";
+  const tagline = s.companyTagline || "DESIGN | PRINTING | BRANDING | 3D SIGNAGE";
+  const logo = s.logoUrl || "/wxy-logo.svg";
+  const bankName = s.bankName || "NMB CLOCK TOWER";
+  const acctNum = s.accountNumber || "4081 0217 414";
+  const acctName = s.accountName || "WXY SOLUTION INVESTMENTS";
+  const swift = s.swiftCode || "NMIBTZTZ";
+  const bCode = s.bankCode || "016408";
+  const brCode = s.branchCode || "408";
+  const mpesa = s.mpesaNumber || "";
+  const defaultNotes = s.defaultNotes || "Free Consultation at Your Business Premises if located within Arusha";
+  const thankYou = s.thankYouMessage || "Thank you for the business";
+
   const lineRows = invoice.lines.map(l => `
         <tr>
           <td>${l.description}</td>
@@ -500,12 +554,12 @@ export function printInvoice(invoice: InvoicePDFData) {
     .invoice-meta .label { font-weight: 400; }
     .invoice-meta .value { font-weight: 600; color: #000; margin-left: 8px; }
     .products-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    .products-table th { background: #f0f0f5; color: #000; padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .products-table th { background: #000; color: #fff; padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .products-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 12px; }
     .products-table td.center { text-align: center; }
     .products-table td.right { text-align: right; }
     .products-table th.right, .products-table th.center { text-align: inherit; }
-    .products-table tr:nth-child(even) { background: #fafafc; }
+    .products-table tr:nth-child(even) { background: #f3f4f4; }
     .totals-section { margin-top: 20px; text-align: right; width: 280px; margin-left: auto; }
     .totals-section .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
     .totals-section .row.total { border-top: 2px solid #ddd; padding-top: 8px; margin-top: 4px; font-weight: 800; font-size: 14px; }
@@ -525,23 +579,30 @@ export function printInvoice(invoice: InvoicePDFData) {
   </style>
 </head>
 <body>
-  <div class="company-header">
-    <div class="company-name">WXY SOLUTIONS</div>
-    <div class="company-address">
-      Dar Es Salaam Branch, Cocacola Road<br>
-      Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe<br>
-      Arusha, Arusha<br>
-      Tanzania, United Republic of
+  <div style="background: linear-gradient(to right, ${headerLeft} 50%, ${headerRight} 50%); color: white; padding: 16px 20px; border-radius: 6px 6px 0 0;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <img src="${logo}" alt="WXY" style="height: 50px; width: auto; filter: brightness(0) invert(1);" />
+        <div>
+          <div class="company-name">${companyName}</div>
+          <div style="font-size: 10px; opacity: 0.9; margin-top: 4px; line-height: 1.5;">
+            ${addr1}<br>
+            ${addr2}<br>
+            ${addrCity}<br>
+            ${addrCountry}
+          </div>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 12px; font-weight: 700;">Contact Information</div>
+        <div style="font-size: 10px; opacity: 0.9; margin-top: 4px;">Mobile: ${phone}</div>
+      </div>
     </div>
-  </div>
-  <div class="contact-info">
-    <div class="label">Contact Information</div>
-    <div class="number">Mobile: +255 764 713 056 | +255 746 589 376</div>
   </div>
 
   <div class="invoice-title">
     <h1>INVOICE</h1>
-    <div class="tagline">DESIGN | PRINTING | BRANDING | 3D SIGNAGE</div>
+    <div class="tagline">${tagline}</div>
   </div>
 
   <div class="amount-box">
@@ -585,35 +646,39 @@ export function printInvoice(invoice: InvoicePDFData) {
   <div class="notes-section">
     <h3>Notes / Terms</h3>
     <p>
-      Free Consultation at Your Business Premises if located within Arusha<br><br>
+      ${defaultNotes}<br><br>
       All PAYMENTS Should be made through<br><br>
-      <strong>NMB CLOCK TOWER</strong><br>
-      ACCOUNT NUMBER: 4081 0217 414<br>
-      NAME: WXY SOLUTION INVESTMENTS<br>
-      SWIFT CODE: NMIBTZTZ<br>
-      BANK CODE: 016408<br>
-      BRANCH CODE: 408<br><br>
-      M-PESA LIPA NUMBER
+      <strong>${bankName}</strong><br>
+      ACCOUNT NUMBER: ${acctNum}<br>
+      NAME: ${acctName}<br>
+      SWIFT CODE: ${swift}<br>
+      BANK CODE: ${bCode}<br>
+      BRANCH CODE: ${brCode}<br>${mpesa ? `<br>M-PESA LIPA NUMBER: ${mpesa}` : "<br><br>M-PESA LIPA NUMBER"}
     </p>
     ${invoice.notes ? `<p style="margin-top: 12px;"><strong>Notes:</strong> ${invoice.notes}</p>` : ""}
     ${invoice.terms ? `<p style="margin-top: 8px;"><strong>Terms:</strong> ${invoice.terms}</p>` : ""}
   </div>
 
-  <div class="thank-you">Thank you for the business</div>
+  <div class="thank-you">${thankYou}</div>
 
-  <div class="bottom-company">
-    <div>
-      <div class="name">WXY SOLUTIONS</div>
-      <div class="details">
-        Dar Es Salaam Branch, Cocacola Road<br>
-        Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe<br>
-        Arusha, Arusha<br>
-        Tanzania, United Republic of
+  <div style="background: linear-gradient(to right, ${headerLeft} 50%, ${headerRight} 50%); color: white; padding: 12px 20px; border-radius: 6px; margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <img src="${logo}" alt="WXY" style="height: 36px; width: auto; filter: brightness(0) invert(1);" />
+        <div>
+          <div style="font-size: 12px; font-weight: 700;">${companyName}</div>
+          <div style="font-size: 9px; opacity: 0.9; margin-top: 4px; line-height: 1.5;">
+            ${addr1}<br>
+            ${addr2}<br>
+            ${addrCity}<br>
+            ${addrCountry}
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="bottom-contact">
-      <div class="label">Contact Information</div>
-      <div class="number">Mobile: +255 764 713 056 | +255 746 589 376</div>
+      <div style="text-align: right;">
+        <div style="font-size: 11px; font-weight: 700;">Contact Information</div>
+        <div style="font-size: 9px; opacity: 0.9; margin-top: 4px;">Mobile: ${phone}</div>
+      </div>
     </div>
   </div>
 

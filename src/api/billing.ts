@@ -8,6 +8,7 @@ import {
   invoiceLines,
   payments,
   recurringInvoices,
+  invoiceSettings,
   users,
   quotes,
   quoteLines,
@@ -498,5 +499,36 @@ export default function registerBillingRoutes(app: any, authMiddleware: any) {
       }
       res.status(201).json(invoice);
     } catch (error: any) { console.error("Order→Invoice error:", error); res.status(500).json({ error: error.message || "Failed" }); }
+  });
+
+  // ── Invoice Template Settings ────────────────────────────────────────────
+
+  app.get("/api/invoice-settings", authMiddleware, async (_req: any, res: any) => {
+    try {
+      const [settings] = await db.select().from(invoiceSettings).limit(1);
+      if (!settings) {
+        // Auto-create default settings
+        const [created] = await db.insert(invoiceSettings).values({}).returning();
+        return res.json(created);
+      }
+      res.json(settings);
+    } catch (error) { console.error("Fetch invoice settings error:", error); res.status(500).json({ error: "Failed to fetch settings" }); }
+  });
+
+  app.put("/api/invoice-settings", authMiddleware, async (req: any, res: any) => {
+    try {
+      const user = (req as any).user;
+      if (!user || user.role !== "admin") return res.status(403).json({ error: "Admin access required" });
+      const [existing] = await db.select().from(invoiceSettings).limit(1);
+      if (!existing) {
+        const [created] = await db.insert(invoiceSettings).values({ ...req.body, updatedAt: new Date() }).returning();
+        return res.json(created);
+      }
+      const [updated] = await db.update(invoiceSettings)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(invoiceSettings.id, existing.id))
+        .returning();
+      res.json(updated);
+    } catch (error) { console.error("Update invoice settings error:", error); res.status(500).json({ error: "Failed to update settings" }); }
   });
 }
