@@ -318,23 +318,16 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFillColor(cRr, cRg, cRb);
   doc.rect(pageWidth / 2, 0, pageWidth / 2, 24, "F");
 
-  // Logo + Company name in white on red bar
+  // Company name + contact info in white on red bar (no logo in header)
   doc.setTextColor(255, 255, 255);
-  let textStartX = ml;
-  if (logoDataUrl) {
-    try {
-      doc.addImage(logoDataUrl, "PNG", ml, 3, 25, 18);
-      textStartX = ml + 28;
-    } catch { /* ignore if image fails */ }
-  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(s.companyName || "WXY SOLUTIONS", textStartX, 10);
+  doc.text(s.companyName || "WXY SOLUTIONS", ml, 10);
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", textStartX, 16);
-  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", textStartX, 20);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", ml, 16);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, 20);
 
   // Contact info (right side, white on red)
   doc.setFont("helvetica", "bold");
@@ -519,6 +512,13 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFontSize(7);
   doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, y + 5, { align: "right" });
 
+  // Logo at bottom-right on white background (below company info)
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, "PNG", pageWidth - mr - 35, y - 1, 35, 14);
+    } catch { /* ignore if image fails */ }
+  }
+
   // ── Footer ──
   doc.setFontSize(7);
   doc.setTextColor(140, 140, 145);
@@ -603,7 +603,8 @@ export function printInvoice(invoice: InvoicePDFData) {
     .notes-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
     .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
     .thank-you { text-align: center; margin-top: 30px; font-size: 14px; font-style: italic; color: #3c3c41; }
-    .bottom-company { margin-top: 24px; display: flex; justify-content: space-between; padding-top: 0; }
+    .footer-separator { border-top: 1px solid #ccc; margin: 30px 0 0 0; }
+    .bottom-company { margin-top: 0; display: flex; justify-content: space-between; padding-top: 12px; }
     .bottom-company .name { font-size: 12px; font-weight: 700; }
     .bottom-company .details { font-size: 10px; color: #505055; line-height: 1.6; }
     .bottom-contact { text-align: right; }
@@ -616,16 +617,13 @@ export function printInvoice(invoice: InvoicePDFData) {
 <body>
   <div style="background: linear-gradient(to right, ${headerLeft} 50%, ${headerRight} 50%); color: white; padding: 16px 20px; border-radius: 6px 6px 0 0;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <img src="${logo}" alt="WXY" style="height: 50px; width: auto; filter: brightness(0) invert(1);" />
-        <div>
-          <div class="company-name">${companyName}</div>
-          <div style="font-size: 10px; opacity: 0.9; margin-top: 4px; line-height: 1.5;">
-            ${addr1}<br>
-            ${addr2}<br>
-            ${addrCity}<br>
-            ${addrCountry}
-          </div>
+      <div>
+        <div class="company-name">${companyName}</div>
+        <div style="font-size: 10px; opacity: 0.9; margin-top: 4px; line-height: 1.5;">
+          ${addr1}<br>
+          ${addr2}<br>
+          ${addrCity}<br>
+          ${addrCountry}
         </div>
       </div>
       <div style="text-align: right;">
@@ -696,24 +694,22 @@ export function printInvoice(invoice: InvoicePDFData) {
 
   <div class="thank-you">${thankYou}</div>
 
-  <div style="background: linear-gradient(to right, ${headerLeft} 50%, ${headerRight} 50%); color: white; padding: 12px 20px; border-radius: 6px; margin-top: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <img src="${logo}" alt="WXY" style="height: 36px; width: auto; filter: brightness(0) invert(1);" />
-        <div>
-          <div style="font-size: 12px; font-weight: 700;">${companyName}</div>
-          <div style="font-size: 9px; opacity: 0.9; margin-top: 4px; line-height: 1.5;">
-            ${addr1}<br>
-            ${addr2}<br>
-            ${addrCity}<br>
-            ${addrCountry}
-          </div>
-        </div>
+  <div class="footer-separator"></div>
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700;">${companyName}</div>
+      <div style="font-size: 9px; color: #505055; margin-top: 4px; line-height: 1.5;">
+        ${addr1}<br>
+        ${addr2}<br>
+        ${addrCity}<br>
+        ${addrCountry}
       </div>
-      <div style="text-align: right;">
-        <div style="font-size: 11px; font-weight: 700;">Contact Information</div>
-        <div style="font-size: 9px; opacity: 0.9; margin-top: 4px;">Mobile: ${phone}</div>
-      </div>
+    </div>
+    <div style="text-align: right;">
+      <img src="${logo}" alt="WXY" style="height: 36px; width: auto; filter: brightness(0) invert(1); display: block; margin-bottom: 2px;" />
+      <div style="font-size: 11px; font-weight: 700;">Contact Information</div>
+      <div style="font-size: 9px; color: #505055; margin-top: 4px;">Mobile: ${phone}</div>
     </div>
   </div>
 
