@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FileText, Plus, Pencil, Trash2, Send, DollarSign, Clock, CheckCircle, AlertCircle, FileSpreadsheet, Eye } from "lucide-react";
+import { FileText, Plus, Pencil, Trash2, Send, DollarSign, Clock, CheckCircle, AlertCircle, FileSpreadsheet, Eye, Download, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { generatePDF, generateCSV, formatDate } from "@/lib/export-utils";
+import { generatePDF, generateCSV, formatDate, generateInvoicePDF, printInvoice, formatTZS } from "@/lib/export-utils";
 import { useSearchParams } from "react-router-dom";
 
 function getAuthHeaders() {
@@ -29,7 +29,7 @@ const statusConfig: Record<string, { color: "default" | "secondary" | "success" 
 };
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-TZ", { style: "currency", currency: "TZS", minimumFractionDigits: 0 }).format(amount);
+  return formatTZS(amount);
 }
 
 export default function InvoicesPage() {
@@ -244,7 +244,37 @@ export default function InvoicesPage() {
                         </div>
                       )}
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setDetailInvoice(inv)}><Eye className="w-3 h-3" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailInvoice(inv)} title="View Details"><Eye className="w-3 h-3" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => generateInvoicePDF({
+                          invoiceNumber: inv.invoiceNumber,
+                          customerName: inv.customerName || "—",
+                          customerBusiness: inv.customerBusinessName || "",
+                          createdAt: inv.createdAt,
+                          dueDate: inv.dueDate,
+                          status: inv.status,
+                          lines: inv.lines || [],
+                          subtotal: inv.subtotal || 0,
+                          taxTotal: inv.taxTotal || 0,
+                          total: inv.total || 0,
+                          amountPaid: inv.amountPaid || 0,
+                          notes: inv.notes,
+                          terms: inv.terms,
+                        })} title="Download PDF"><Download className="w-3 h-3" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => printInvoice({
+                          invoiceNumber: inv.invoiceNumber,
+                          customerName: inv.customerName || "—",
+                          customerBusiness: inv.customerBusinessName || "",
+                          createdAt: inv.createdAt,
+                          dueDate: inv.dueDate,
+                          status: inv.status,
+                          lines: inv.lines || [],
+                          subtotal: inv.subtotal || 0,
+                          taxTotal: inv.taxTotal || 0,
+                          total: inv.total || 0,
+                          amountPaid: inv.amountPaid || 0,
+                          notes: inv.notes,
+                          terms: inv.terms,
+                        })} title="Print Receipt"><Printer className="w-3 h-3" /></Button>
                         {isAdmin && <Button size="sm" variant="ghost" onClick={() => openEdit(inv)}><Pencil className="w-3 h-3" /></Button>}
                         {isAdmin && <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteInvoice(inv.id)}><Trash2 className="w-3 h-3" /></Button>}
                       </div>
@@ -368,7 +398,45 @@ export default function InvoicesPage() {
       {/* Invoice Detail Dialog */}
       <Dialog open={!!detailInvoice} onOpenChange={() => setDetailInvoice(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Invoice {detailInvoice?.invoiceNumber}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between w-full">
+              <DialogTitle>Invoice {detailInvoice?.invoiceNumber}</DialogTitle>
+              {detailInvoice && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => generateInvoicePDF({
+                    invoiceNumber: detailInvoice.invoiceNumber,
+                    customerName: detailInvoice.customerName || "—",
+                    customerBusiness: detailInvoice.customerBusinessName || "",
+                    createdAt: detailInvoice.createdAt,
+                    dueDate: detailInvoice.dueDate,
+                    status: detailInvoice.status,
+                    lines: detailInvoice.lines || [],
+                    subtotal: detailInvoice.subtotal || 0,
+                    taxTotal: detailInvoice.taxTotal || 0,
+                    total: detailInvoice.total || 0,
+                    amountPaid: detailInvoice.amountPaid || 0,
+                    notes: detailInvoice.notes,
+                    terms: detailInvoice.terms,
+                  })}><Download className="w-4 h-4 mr-1" /> Download PDF</Button>
+                  <Button size="sm" variant="outline" onClick={() => printInvoice({
+                    invoiceNumber: detailInvoice.invoiceNumber,
+                    customerName: detailInvoice.customerName || "—",
+                    customerBusiness: detailInvoice.customerBusinessName || "",
+                    createdAt: detailInvoice.createdAt,
+                    dueDate: detailInvoice.dueDate,
+                    status: detailInvoice.status,
+                    lines: detailInvoice.lines || [],
+                    subtotal: detailInvoice.subtotal || 0,
+                    taxTotal: detailInvoice.taxTotal || 0,
+                    total: detailInvoice.total || 0,
+                    amountPaid: detailInvoice.amountPaid || 0,
+                    notes: detailInvoice.notes,
+                    terms: detailInvoice.terms,
+                  })}><Printer className="w-4 h-4 mr-1" /> Print Receipt</Button>
+                </div>
+              )}
+            </div>
+          </DialogHeader>
           {detailInvoice && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

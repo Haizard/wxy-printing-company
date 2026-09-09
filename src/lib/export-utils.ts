@@ -223,3 +223,409 @@ export function formatDateTime(dateStr: string | null | undefined): string {
     minute: "2-digit",
   });
 }
+
+// ── Single Invoice PDF (receipt-style) ────────────────────────────────────
+
+export interface InvoicePDFData {
+  invoiceNumber: string;
+  customerName: string;
+  customerBusiness?: string;
+  createdAt: string;
+  dueDate?: string;
+  status: string;
+  lines: { description: string; quantity: number; unitPrice: number; taxRate?: number; lineTotal: number }[];
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  amountPaid: number;
+  notes?: string;
+  terms?: string;
+}
+
+export function generateInvoicePDF(invoice: InvoicePDFData) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const ml = 10; // left margin
+  const mr = 10; // right margin
+  const contentWidth = pageWidth - ml - mr;
+  let y = 8;
+
+  // ── Company Header ──
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("WXY SOLUTIONS", ml, y + 4);
+
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 85);
+  doc.text("Dar Es Salaam Branch, Cocacola Road", ml, y + 10);
+  doc.text("Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 14);
+  doc.text("Arusha, Arusha", ml, y + 18);
+  doc.text("Tanzania, United Republic of", ml, y + 22);
+
+  // Contact info (right side)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Contact Information", pageWidth - mr, y + 4, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 85);
+  doc.text("Mobile: +255 764 713 056 | +255 746 589 376", pageWidth - mr, y + 10, { align: "right" });
+
+  y += 28;
+
+  // ── "INVOICE" title + tagline ──
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.text("INVOICE", ml, y + 6);
+
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 105);
+  doc.text("DESIGN | PRINTING | BRANDING | 3D SIGNAGE", ml, y + 12);
+
+  // ── Amount Due box (right) ──
+  const boxX = pageWidth - mr - 55;
+  const boxY = y - 2;
+  doc.setDrawColor(200, 200, 205);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(boxX, boxY, 55, 16, 1, 1, "S");
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 85);
+  doc.text("Amount Due (TZS)", boxX + 27.5, boxY + 5, { align: "center" });
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  const balance = invoice.total - invoice.amountPaid;
+  doc.text(`Sh${balance.toLocaleString("en-US")}.00`, boxX + 27.5, boxY + 13, { align: "center" });
+
+  y += 22;
+
+  // ── Bill To (left) + Invoice Details (right) ──
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text("BILL TO", ml, y);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(invoice.customerBusiness || invoice.customerName, ml, y + 6);
+  doc.setTextColor(80, 80, 85);
+  doc.setFontSize(8);
+  doc.text(invoice.customerName, ml, y + 11);
+
+  // Invoice details (right side)
+  const detailX = pageWidth - mr - 60;
+  doc.setTextColor(80, 80, 85);
+  doc.setFontSize(8);
+  doc.text("Invoice Number:", detailX, y);
+  doc.text(invoice.invoiceNumber, detailX + 40, y);
+  doc.text("Invoice Date:", detailX, y + 6);
+  doc.text(formatDate(invoice.createdAt), detailX + 40, y + 6);
+  doc.text("Payment Due:", detailX, y + 12);
+  doc.text(invoice.dueDate ? formatDate(invoice.dueDate) : "—", detailX + 40, y + 12);
+  doc.text("Amount Due (TZS):", detailX, y + 18);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Sh${balance.toLocaleString("en-US")}.00`, detailX + 40, y + 18);
+
+  y += 30;
+
+  // ── Line items table ──
+  const head = [["PRODUCTS", "QUANTITY", "PRICE", "AMOUNT"]];
+  const body = invoice.lines.map((l) => [
+    l.description,
+    String(l.quantity),
+    `Sh${l.unitPrice.toLocaleString("en-US")}.00`,
+    `Sh${l.lineTotal.toLocaleString("en-US")}.00`,
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head,
+    body,
+    styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", font: "helvetica" },
+    headStyles: { fillColor: [240, 240, 245], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
+    alternateRowStyles: { fillColor: [250, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: "auto" },
+      1: { cellWidth: 25, halign: "center" },
+      2: { cellWidth: 35, halign: "right" },
+      3: { cellWidth: 35, halign: "right" },
+    },
+    margin: { left: ml, right: mr },
+  });
+
+  // @ts-ignore – jspdf-autotable types lag behind
+  y = (doc as any).lastAutoTable?.finalY || y + 20;
+
+  // ── Totals (right-aligned) ──
+  const totalsX = pageWidth - mr - 65;
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "normal");
+  doc.text("Total:", totalsX, y);
+  doc.text(`Sh${invoice.total.toLocaleString("en-US")}.00`, pageWidth - mr, y, { align: "right" });
+
+  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("Amount Due (TZS):", totalsX, y);
+  doc.text(`Sh${balance.toLocaleString("en-US")}.00`, pageWidth - mr, y, { align: "right" });
+
+  // ── Notes / Terms (bank details) ──
+  y += 16;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Notes / Terms", ml, y);
+
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(60, 60, 65);
+  const bankNotes = [
+    "Free Consultation at Your Business Premises if located within Arusha",
+    "",
+    "All PAYMENTS Should be made through",
+    "",
+    "NMB CLOCK TOWER",
+    "ACCOUNT NUMBER: 4081 0217 414",
+    "NAME: WXY SOLUTION INVESTMENTS",
+    "SWIFT CODE: NMIBTZTZ",
+    "BANK CODE: 016408",
+    "BRANCH CODE: 408",
+    "",
+    "M-PESA LIPA NUMBER",
+  ];
+  bankNotes.forEach((line) => {
+    if (line) doc.text(line, ml, y);
+    y += 4;
+  });
+
+  // Custom notes/terms from invoice data
+  if (invoice.notes) {
+    y += 2;
+    const noteLines = doc.splitTextToSize(invoice.notes, contentWidth);
+    doc.text(noteLines, ml, y);
+    y += noteLines.length * 4;
+  }
+  if (invoice.terms) {
+    y += 2;
+    const termLines = doc.splitTextToSize(invoice.terms, contentWidth);
+    doc.text(termLines, ml, y);
+    y += termLines.length * 4;
+  }
+
+  // ── Thank you message ──
+  y += 10;
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 65);
+  doc.text("Thank you for the business", pageWidth / 2, y, { align: "center" });
+
+  // ── Company details at bottom ──
+  y += 12;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text("WXY SOLUTIONS", ml, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 85);
+  doc.text("Dar Es Salaam Branch, Cocacola Road", ml, y + 5);
+  doc.text("Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 10);
+  doc.text("Arusha, Arusha", ml, y + 15);
+  doc.text("Tanzania, United Republic of", ml, y + 20);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("Contact Information", pageWidth - mr, y, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("Mobile: +255 764 713 056 | +255 746 589 376", pageWidth - mr, y + 5, { align: "right" });
+
+  // ── Footer ──
+  doc.setFontSize(7);
+  doc.setTextColor(140, 140, 145);
+  doc.text(`Page 1 of 1 for INVOICE #${invoice.invoiceNumber}`, pageWidth / 2, pageHeight - 10, { align: "center" });
+
+  doc.save(`${invoice.invoiceNumber}.pdf`);
+}
+
+// ── Print Invoice as Receipt ───────────────────────────────────────────────
+
+export function printInvoice(invoice: InvoicePDFData) {
+  const balance = invoice.total - invoice.amountPaid;
+  const lineRows = invoice.lines.map(l => `
+        <tr>
+          <td>${l.description}</td>
+          <td class="center">${l.quantity}</td>
+          <td class="right">Sh${l.unitPrice.toLocaleString("en-US")}.00</td>
+          <td class="right">Sh${l.lineTotal.toLocaleString("en-US")}.00</td>
+        </tr>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice ${invoice.invoiceNumber}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #000; max-width: 800px; margin: 0 auto; background: white; }
+    .company-header { margin-bottom: 10px; }
+    .company-name { font-size: 20px; font-weight: 800; color: #000; }
+    .company-address { font-size: 11px; color: #505055; line-height: 1.6; margin-top: 4px; }
+    .contact-info { float: right; text-align: right; margin-top: -40px; }
+    .contact-info .label { font-size: 12px; font-weight: 700; color: #000; }
+    .contact-info .number { font-size: 11px; color: #505055; margin-top: 2px; }
+    .invoice-title { margin-top: 16px; }
+    .invoice-title h1 { font-size: 28px; font-weight: 800; color: #000; }
+    .invoice-title .tagline { font-size: 11px; color: #646469; margin-top: 4px; letter-spacing: 0.5px; }
+    .amount-box { float: right; border: 1px solid #ccc; border-radius: 6px; padding: 10px 20px; text-align: center; margin-top: -60px; width: 200px; }
+    .amount-box .label { font-size: 11px; color: #505055; }
+    .amount-box .value { font-size: 18px; font-weight: 800; color: #000; margin-top: 4px; }
+    .bill-details { display: flex; justify-content: space-between; margin-top: 30px; padding-bottom: 10px; }
+    .bill-to .label { font-size: 12px; font-weight: 700; color: #000; text-transform: uppercase; margin-bottom: 6px; }
+    .bill-to .name { font-size: 13px; font-weight: 600; }
+    .bill-to .phone { font-size: 12px; color: #505055; margin-top: 4px; }
+    .invoice-meta { text-align: right; font-size: 12px; color: #505055; }
+    .invoice-meta .row { margin-bottom: 4px; }
+    .invoice-meta .label { font-weight: 400; }
+    .invoice-meta .value { font-weight: 600; color: #000; margin-left: 8px; }
+    .products-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .products-table th { background: #f0f0f5; color: #000; padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .products-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 12px; }
+    .products-table td.center { text-align: center; }
+    .products-table td.right { text-align: right; }
+    .products-table th.right, .products-table th.center { text-align: inherit; }
+    .products-table tr:nth-child(even) { background: #fafafc; }
+    .totals-section { margin-top: 20px; text-align: right; width: 280px; margin-left: auto; }
+    .totals-section .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+    .totals-section .row.total { border-top: 2px solid #ddd; padding-top: 8px; margin-top: 4px; font-weight: 800; font-size: 14px; }
+    .totals-section .row.amount-due { font-weight: 800; font-size: 14px; margin-top: 4px; }
+    .notes-section { margin-top: 30px; border-top: 1px solid #eee; padding-top: 16px; }
+    .notes-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
+    .thank-you { text-align: center; margin-top: 30px; font-size: 14px; font-style: italic; color: #3c3c41; }
+    .bottom-company { margin-top: 24px; display: flex; justify-content: space-between; border-top: 1px solid #eee; padding-top: 12px; }
+    .bottom-company .name { font-size: 12px; font-weight: 700; }
+    .bottom-company .details { font-size: 10px; color: #505055; line-height: 1.6; }
+    .bottom-contact { text-align: right; }
+    .bottom-contact .label { font-size: 11px; font-weight: 700; }
+    .bottom-contact .number { font-size: 10px; color: #505055; }
+    .page-footer { text-align: center; margin-top: 30px; font-size: 10px; color: #8c8c91; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="company-header">
+    <div class="company-name">WXY SOLUTIONS</div>
+    <div class="company-address">
+      Dar Es Salaam Branch, Cocacola Road<br>
+      Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe<br>
+      Arusha, Arusha<br>
+      Tanzania, United Republic of
+    </div>
+  </div>
+  <div class="contact-info">
+    <div class="label">Contact Information</div>
+    <div class="number">Mobile: +255 764 713 056 | +255 746 589 376</div>
+  </div>
+
+  <div class="invoice-title">
+    <h1>INVOICE</h1>
+    <div class="tagline">DESIGN | PRINTING | BRANDING | 3D SIGNAGE</div>
+  </div>
+
+  <div class="amount-box">
+    <div class="label">Amount Due (TZS)</div>
+    <div class="value">Sh${balance.toLocaleString("en-US")}.00</div>
+  </div>
+
+  <div class="bill-details">
+    <div class="bill-to">
+      <div class="label">BILL TO</div>
+      <div class="name">${invoice.customerBusiness || invoice.customerName}</div>
+      <div class="phone">${invoice.customerName}</div>
+    </div>
+    <div class="invoice-meta">
+      <div class="row"><span class="label">Invoice Number:</span><span class="value">${invoice.invoiceNumber}</span></div>
+      <div class="row"><span class="label">Invoice Date:</span><span class="value">${formatDate(invoice.createdAt)}</span></div>
+      <div class="row"><span class="label">Payment Due:</span><span class="value">${invoice.dueDate ? formatDate(invoice.dueDate) : "—"}</span></div>
+      <div class="row"><span class="label">Amount Due (TZS):</span><span class="value">Sh${balance.toLocaleString("en-US")}.00</span></div>
+    </div>
+  </div>
+
+  <table class="products-table">
+    <thead>
+      <tr>
+        <th>PRODUCTS</th>
+        <th class="center">QUANTITY</th>
+        <th class="right">PRICE</th>
+        <th class="right">AMOUNT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lineRows}
+    </tbody>
+  </table>
+
+  <div class="totals-section">
+    <div class="row total"><span>Total:</span><span>Sh${invoice.total.toLocaleString("en-US")}.00</span></div>
+    <div class="row amount-due"><span>Amount Due (TZS):</span><span>Sh${balance.toLocaleString("en-US")}.00</span></div>
+  </div>
+
+  <div class="notes-section">
+    <h3>Notes / Terms</h3>
+    <p>
+      Free Consultation at Your Business Premises if located within Arusha<br><br>
+      All PAYMENTS Should be made through<br><br>
+      <strong>NMB CLOCK TOWER</strong><br>
+      ACCOUNT NUMBER: 4081 0217 414<br>
+      NAME: WXY SOLUTION INVESTMENTS<br>
+      SWIFT CODE: NMIBTZTZ<br>
+      BANK CODE: 016408<br>
+      BRANCH CODE: 408<br><br>
+      M-PESA LIPA NUMBER
+    </p>
+    ${invoice.notes ? `<p style="margin-top: 12px;"><strong>Notes:</strong> ${invoice.notes}</p>` : ""}
+    ${invoice.terms ? `<p style="margin-top: 8px;"><strong>Terms:</strong> ${invoice.terms}</p>` : ""}
+  </div>
+
+  <div class="thank-you">Thank you for the business</div>
+
+  <div class="bottom-company">
+    <div>
+      <div class="name">WXY SOLUTIONS</div>
+      <div class="details">
+        Dar Es Salaam Branch, Cocacola Road<br>
+        Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe<br>
+        Arusha, Arusha<br>
+        Tanzania, United Republic of
+      </div>
+    </div>
+    <div class="bottom-contact">
+      <div class="label">Contact Information</div>
+      <div class="number">Mobile: +255 764 713 056 | +255 746 589 376</div>
+    </div>
+  </div>
+
+  <div class="page-footer">Page 1 of 1 for INVOICE #${invoice.invoiceNumber}</div>
+</body>
+</html>`;
+
+  const printWindow = window.open("", "_blank");
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 400);
+  }
+}
