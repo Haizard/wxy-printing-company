@@ -603,7 +603,7 @@ export function printInvoice(invoice: InvoicePDFData) {
     .notes-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
     .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
     .thank-you { text-align: center; margin-top: 30px; font-size: 14px; font-style: italic; color: #3c3c41; }
-    .bottom-company { margin-top: 24px; display: flex; justify-content: space-between; border-top: 1px solid #eee; padding-top: 12px; }
+    .bottom-company { margin-top: 24px; display: flex; justify-content: space-between; padding-top: 0; }
     .bottom-company .name { font-size: 12px; font-weight: 700; }
     .bottom-company .details { font-size: 10px; color: #505055; line-height: 1.6; }
     .bottom-contact { text-align: right; }
