@@ -266,7 +266,29 @@ export interface InvoicePDFData {
   settings?: InvoiceSettings;
 }
 
-export function generateInvoicePDF(invoice: InvoicePDFData) {
+// Convert SVG URL to base64 PNG data URL via canvas
+async function svgToPngDataUrl(svgUrl: string, width = 200, height = 70): Promise<string | null> {
+  try {
+    const resp = await fetch(svgUrl);
+    if (!resp.ok) return null;
+    const svgText = await resp.text();
+    const blob = new Blob([svgText], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.src = url;
+    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { URL.revokeObjectURL(url); return null; }
+    ctx.drawImage(img, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    return canvas.toDataURL("image/png");
+  } catch { return null; }
+}
+
+export async function generateInvoicePDF(invoice: InvoicePDFData) {
   const s = invoice.settings || {};
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -275,6 +297,12 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   const mr = 10; // right margin
   const contentWidth = pageWidth - ml - mr;
   let y = 8;
+
+  // Convert logo SVG to PNG for PDF embedding
+  let logoDataUrl: string | null = null;
+  if (s.logoUrl) {
+    logoDataUrl = await svgToPngDataUrl(s.logoUrl);
+  }
 
   // Parse colors
   const parseHex = (hex: string) => {
@@ -290,16 +318,23 @@ export function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFillColor(cRr, cRg, cRb);
   doc.rect(pageWidth / 2, 0, pageWidth / 2, 24, "F");
 
-  // Company name + address in white on red bar
+  // Logo + Company name in white on red bar
   doc.setTextColor(255, 255, 255);
+  let textStartX = ml;
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, "PNG", ml, 3, 25, 18);
+      textStartX = ml + 28;
+    } catch { /* ignore if image fails */ }
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(s.companyName || "WXY SOLUTIONS", ml, 10);
+  doc.text(s.companyName || "WXY SOLUTIONS", textStartX, 10);
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", ml, 16);
-  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, 20);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", textStartX, 16);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", textStartX, 20);
 
   // Contact info (right side, white on red)
   doc.setFont("helvetica", "bold");

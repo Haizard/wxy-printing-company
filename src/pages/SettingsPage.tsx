@@ -273,7 +273,15 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>Logo URL</Label>
-              <Input value={invoiceSettings.logoUrl || ""} onChange={(e) => setInv("logoUrl", e.target.value)} placeholder="/wxy-logo.svg" />
+              <div className="flex items-center gap-3">
+                <Input value={invoiceSettings.logoUrl || ""} onChange={(e) => setInv("logoUrl", e.target.value)} placeholder="/wxy-logo.svg" className="flex-1" />
+                {invoiceSettings.logoUrl && (
+                  <div className="w-20 h-12 rounded border border-[var(--glass-border)] bg-white flex items-center justify-center p-1 flex-shrink-0">
+                    <img src={invoiceSettings.logoUrl} alt="Logo preview" className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  </div>
+                )}
+              </div>
+              <p className="text-caption text-[var(--text-tertiary)]">Preview shows the logo as it appears on invoices</p>
             </div>
 
             <Separator className="my-4" />
