@@ -512,10 +512,13 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFontSize(7);
   doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, y + 5, { align: "right" });
 
-  // Logo at bottom-right on white background (below company info)
+  // Logo at bottom-right (next to Contact Information)
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, "PNG", pageWidth - mr - 35, y - 1, 35, 14);
+      // Position: right side, aligned with company name
+      const logoW = 32;
+      const logoH = 12;
+      doc.addImage(logoDataUrl, "PNG", pageWidth - mr - logoW, y + 1, logoW, logoH);
     } catch { /* ignore if image fails */ }
   }
 
@@ -603,7 +606,7 @@ export function printInvoice(invoice: InvoicePDFData) {
     .notes-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
     .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
     .thank-you { text-align: center; margin-top: 30px; font-size: 14px; font-style: italic; color: #3c3c41; }
-    .footer-separator { border-top: 1px solid #ccc; margin: 30px 0 0 0; }
+    .footer-separator { border-top: 1.5px solid #999; margin: 30px 0 8px 0; }
     .bottom-company { margin-top: 0; display: flex; justify-content: space-between; padding-top: 12px; }
     .bottom-company .name { font-size: 12px; font-weight: 700; }
     .bottom-company .details { font-size: 10px; color: #505055; line-height: 1.6; }
@@ -707,7 +710,7 @@ export function printInvoice(invoice: InvoicePDFData) {
       </div>
     </div>
     <div style="text-align: right;">
-      <img src="${logo}" alt="WXY" style="height: 36px; width: auto; filter: brightness(0) invert(1); display: block; margin-bottom: 2px;" />
+      <img src="${logo}" alt="WXY" style="height: 36px; width: auto; display: block; margin-bottom: 2px;" />
       <div style="font-size: 11px; font-weight: 700;">Contact Information</div>
       <div style="font-size: 9px; color: #505055; margin-top: 4px;">Mobile: ${phone}</div>
     </div>
