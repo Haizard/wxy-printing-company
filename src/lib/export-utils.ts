@@ -266,26 +266,88 @@ export interface InvoicePDFData {
   settings?: InvoiceSettings;
 }
 
-// Convert SVG URL to base64 PNG data URL via canvas
-async function svgToPngDataUrl(svgUrl: string, width = 200, height = 70): Promise<string | null> {
+// Resolve logo to a data URL that jsPDF can consume.
+// - data URLs are returned as-is
+// - SVG file URLs are fetched, drawn on canvas → PNG data URL
+async function resolveLogoForPdf(logoUrl: string): Promise<string | null> {
   try {
-    const resp = await fetch(svgUrl);
+    if (!logoUrl || logoUrl === "/wxy-logo.svg") {
+      // For the default SVG, fetch it from the same origin
+      const resp = await fetch("/wxy-logo.svg", { credentials: "same-origin" });
+      if (!resp.ok) return null;
+      const svgText = await resp.text();
+      const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(svgBlob);
+      try {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = blobUrl;
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("SVG image load failed"));
+          setTimeout(() => reject(new Error("SVG image timeout")), 5000);
+        });
+        const w = img.naturalWidth || 400;
+        const h = img.naturalHeight || 140;
+        const canvas = document.createElement("canvas");
+        canvas.width = w * 2; // 2x for quality
+        canvas.height = h * 2;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+    }
+    // Already a data URL — use directly
+    if (logoUrl.startsWith("data:")) return logoUrl;
+    // External URL — fetch and convert
+    const resp = await fetch(logoUrl, { credentials: "include" });
     if (!resp.ok) return null;
+    const ct = resp.headers.get("content-type") || "";
+    if (ct.includes("image/png") || ct.includes("image/jpeg")) {
+      const blob = await resp.blob();
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve("");
+        reader.readAsDataURL(blob);
+      });
+    }
+    // SVG external URL
     const svgText = await resp.text();
-    const blob = new Blob([svgText], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.src = url;
-    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; });
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) { URL.revokeObjectURL(url); return null; }
-    ctx.drawImage(img, 0, 0, width, height);
-    URL.revokeObjectURL(url);
-    return canvas.toDataURL("image/png");
-  } catch { return null; }
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(svgBlob);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = blobUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("SVG image load failed"));
+        setTimeout(() => reject(new Error("SVG image timeout")), 5000);
+      });
+      const w = img.naturalWidth || 400;
+      const h = img.naturalHeight || 140;
+      const canvas = document.createElement("canvas");
+      canvas.width = w * 2;
+      canvas.height = h * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } catch (e) {
+    console.warn("[Invoice] Logo resolution failed:", e);
+    return null;
+  }
 }
 
 export async function generateInvoicePDF(invoice: InvoicePDFData) {
@@ -298,11 +360,9 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   const contentWidth = pageWidth - ml - mr;
   let y = 8;
 
-  // Convert logo SVG to PNG for PDF embedding
+  // Resolve logo for PDF embedding (always tries — default logo included)
   let logoDataUrl: string | null = null;
-  if (s.logoUrl) {
-    logoDataUrl = await svgToPngDataUrl(s.logoUrl);
-  }
+  logoDataUrl = await resolveLogoForPdf(s.logoUrl || "/wxy-logo.svg");
 
   // Parse colors
   const parseHex = (hex: string) => {
@@ -491,62 +551,47 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setTextColor(60, 60, 65);
   doc.text(s.thankYouMessage || "Thank you for the business", pageWidth / 2, y, { align: "center" });
 
-  // ── Company details at bottom ──
-  y += 12;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(0, 0, 0);
-  doc.text(s.companyName || "WXY SOLUTIONS", ml, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(80, 80, 85);
-  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", ml, y + 5);
-  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", ml, y + 10);
-  doc.text(s.addressCity || "Arusha, Arusha", ml, y + 15);
-  doc.text(s.addressCountry || "Tanzania, United Republic of", ml, y + 20);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("Contact Information", pageWidth - mr, y, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, y + 5, { align: "right" });
-
   // ── Separator line between body and footer ──
-  doc.setDrawColor(180, 180, 185);
-  doc.setLineWidth(0.4);
-  doc.line(ml, y + 28, pageWidth - mr, y + 28);
+  y += 12;
+  doc.setDrawColor(150, 150, 155);
+  doc.setLineWidth(0.5);
+  doc.line(ml, y, pageWidth - mr, y);
 
-  // ── Company details at bottom (3 columns) ──
-  const footerY = y + 33;
-  // Left: logo
+  // ── Footer: 3-column layout (logo | company+address | contact) ──
+  const footerY = y + 8;
+  const colLeft = ml; // logo column
+  const colMid = 60; // company name starts after logo space
+  const colRight = pageWidth - mr - 55; // contact column
+
+  // Left: logo (bigger)
   if (logoDataUrl) {
     try {
-      const logoW = 35;
-      const logoH = 14;
-      doc.addImage(logoDataUrl, "PNG", ml, footerY - 1, logoW, logoH);
+      const logoW = 45;
+      const logoH = 18;
+      doc.addImage(logoDataUrl, "PNG", colLeft, footerY - 2, logoW, logoH);
     } catch { /* ignore if image fails */ }
   }
+
   // Middle: company name + address
-  const midX = pageWidth / 2 - 25;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
-  doc.text(s.companyName || "WXY SOLUTIONS", midX, footerY);
+  doc.text(s.companyName || "WXY SOLUTIONS", colMid, footerY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 85);
-  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", midX, footerY + 5);
-  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", midX, footerY + 10);
-  doc.text(s.addressCity || "Arusha, Arusha", midX, footerY + 15);
-  doc.text(s.addressCountry || "Tanzania, United Republic of", midX, footerY + 20);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", colMid, footerY + 5);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", colMid, footerY + 10);
+  doc.text(s.addressCity || "Arusha, Arusha", colMid, footerY + 15);
+  doc.text(s.addressCountry || "Tanzania, United Republic of", colMid, footerY + 20);
+
   // Right: contact info
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("Contact Information", pageWidth - mr - 50, footerY, { align: "right" });
+  doc.text("Contact Information", colRight + 55, footerY, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr - 50, footerY + 5, { align: "right" });
+  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, colRight + 55, footerY + 5, { align: "right" });
 
   // ── Page number ──
   doc.setFontSize(7);
@@ -635,7 +680,7 @@ export function printInvoice(invoice: InvoicePDFData) {
     .footer-separator { border-top: 1.5px solid #999; margin: 30px 0 8px 0; }
     .bottom-company { margin-top: 0; display: flex; justify-content: space-between; align-items: flex-start; padding-top: 12px; gap: 20px; }
     .bottom-logo { flex: 0 0 auto; }
-    .bottom-logo img { height: 30px; width: auto; display: block; }
+    .bottom-logo img { height: 50px; width: auto; display: block; }
     .bottom-center { flex: 0 0 auto; text-align: center; }
     .bottom-center .company-name { font-size: 12px; font-weight: 700; text-align: center; margin-bottom: 4px; }
     .bottom-center .details { font-size: 9px; color: #505055; line-height: 1.5; text-align: center; }
@@ -730,7 +775,7 @@ export function printInvoice(invoice: InvoicePDFData) {
 
   <div class="bottom-company">
     <div class="bottom-logo">
-      <img src="${logo}" alt="WXY" style="height: 30px; width: auto; display: block;" />
+      <img src="${logo}" alt="WXY" style="height: 50px; width: auto; display: block;" />
     </div>
     <div class="bottom-center">
       <div style="font-size: 12px; font-weight: 700;">${companyName}</div>
