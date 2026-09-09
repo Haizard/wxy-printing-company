@@ -458,7 +458,9 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
 
   // ── Line items table ──
   const head = [["PRODUCTS", "QUANTITY", "PRICE", "AMOUNT"]];
-  const body = invoice.lines.map((l) => [
+  // Filter out empty/zero-value line items
+  const validLines = invoice.lines.filter((l) => l.description && l.lineTotal > 0);
+  const body = validLines.map((l) => [
     l.description,
     String(l.quantity),
     `Sh${l.unitPrice.toLocaleString("en-US")}.00`,
@@ -469,34 +471,69 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
     startY: y,
     head,
     body,
-    styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", font: "helvetica" },
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
-    alternateRowStyles: { fillColor: [243, 244, 244] }, // #f3f4f4
+    styles: {
+      fontSize: 9,
+      cellPadding: 5,
+      overflow: "linebreak",
+      font: "helvetica",
+      textColor: [30, 30, 35],
+      lineColor: [220, 222, 226],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [35, 35, 40],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 9,
+      cellPadding: 6,
+    },
+    alternateRowStyles: { fillColor: [248, 249, 250] },
     columnStyles: {
-      0: { cellWidth: "auto" },
-      1: { cellWidth: 25, halign: "center" },
-      2: { cellWidth: 35, halign: "right" },
-      3: { cellWidth: 35, halign: "right" },
+      0: { cellWidth: "auto", fontStyle: "bold" },
+      1: { cellWidth: 28, halign: "center" },
+      2: { cellWidth: 38, halign: "right" },
+      3: { cellWidth: 38, halign: "right", fontStyle: "bold" },
     },
     margin: { left: ml, right: mr },
+    didDrawCell: (data) => {
+      // Add subtle bottom border to each row
+      if (data.section === "body") {
+        const { x, y: cy, width, height } = data.cell;
+        doc.setDrawColor(230, 232, 235);
+        doc.setLineWidth(0.1);
+        doc.line(x, cy + height, x + width, cy + height);
+      }
+    },
   });
 
   // @ts-ignore – jspdf-autotable types lag behind
   y = (doc as any).lastAutoTable?.finalY || y + 20;
 
-  // ── Totals (right-aligned) ──
+  // ── Totals (right-aligned, styled) ──
   const totalsX = pageWidth - mr - 65;
-  y += 8;
+  y += 10;
 
+  // Separator line above totals
+  doc.setDrawColor(180, 182, 186);
+  doc.setLineWidth(0.3);
+  doc.line(totalsX, y, pageWidth - mr, y);
+
+  y += 6;
   doc.setFontSize(9);
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(50, 50, 55);
   doc.setFont("helvetica", "normal");
   doc.text("Total:", totalsX, y);
   doc.text(`Sh${invoice.total.toLocaleString("en-US")}.00`, pageWidth - mr, y, { align: "right" });
 
-  y += 10;
+  y += 8;
+  doc.setDrawColor(35, 35, 40);
+  doc.setLineWidth(0.4);
+  doc.line(totalsX, y, pageWidth - mr, y);
+
+  y += 7;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
   doc.text("Amount Due (TZS):", totalsX, y);
   doc.text(`Sh${balance.toLocaleString("en-US")}.00`, pageWidth - mr, y, { align: "right" });
 
@@ -626,12 +663,13 @@ export function printInvoice(invoice: InvoicePDFData) {
   const defaultNotes = s.defaultNotes || "Free Consultation at Your Business Premises if located within Arusha";
   const thankYou = s.thankYouMessage || "Thank you for the business";
 
-  const lineRows = invoice.lines.map(l => `
+  const validLines = invoice.lines.filter(l => l.description && l.lineTotal > 0);
+  const lineRows = validLines.map(l => `
         <tr>
-          <td>${l.description}</td>
+          <td><strong>${l.description}</strong></td>
           <td class="center">${l.quantity}</td>
           <td class="right">Sh${l.unitPrice.toLocaleString("en-US")}.00</td>
-          <td class="right">Sh${l.lineTotal.toLocaleString("en-US")}.00</td>
+          <td class="right amount">Sh${l.lineTotal.toLocaleString("en-US")}.00</td>
         </tr>`).join("");
 
   const html = `<!DOCTYPE html>
@@ -662,17 +700,19 @@ export function printInvoice(invoice: InvoicePDFData) {
     .invoice-meta .row { margin-bottom: 4px; }
     .invoice-meta .label { font-weight: 400; }
     .invoice-meta .value { font-weight: 600; color: #000; margin-left: 8px; }
-    .products-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    .products-table th { background: #000; color: #fff; padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    .products-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 12px; }
+    .products-table { width: 100%; border-collapse: collapse; margin-top: 24px; border-radius: 6px; overflow: hidden; }
+    .products-table th { background: #232328; color: #fff; padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .products-table td { padding: 10px 14px; border-bottom: 1px solid #e8eaed; font-size: 12px; color: #1e1e23; }
     .products-table td.center { text-align: center; }
     .products-table td.right { text-align: right; }
+    .products-table td.amount { font-weight: 600; }
     .products-table th.right, .products-table th.center { text-align: inherit; }
-    .products-table tr:nth-child(even) { background: #f3f4f4; }
-    .totals-section { margin-top: 20px; text-align: right; width: 280px; margin-left: auto; }
-    .totals-section .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-    .totals-section .row.total { border-top: 2px solid #ddd; padding-top: 8px; margin-top: 4px; font-weight: 800; font-size: 14px; }
-    .totals-section .row.amount-due { font-weight: 800; font-size: 14px; margin-top: 4px; }
+    .products-table tr:nth-child(even) { background: #f8f9fa; }
+    .products-table tr:hover { background: #f0f1f3; }
+    .totals-section { margin-top: 24px; text-align: right; width: 300px; margin-left: auto; padding: 12px 0; }
+    .totals-section .row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: #3c3c41; }
+    .totals-section .row.total { border-top: 1px solid #dcdfe2; padding-top: 10px; margin-top: 6px; font-weight: 700; font-size: 14px; }
+    .totals-section .row.amount-due { font-weight: 800; font-size: 15px; margin-top: 6px; border-top: 2px solid #232328; padding-top: 10px; color: #000; }
     .notes-section { margin-top: 30px; border-top: 1px solid #eee; padding-top: 16px; }
     .notes-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
     .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
