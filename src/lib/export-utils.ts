@@ -512,17 +512,43 @@ export async function generateInvoicePDF(invoice: InvoicePDFData) {
   doc.setFontSize(7);
   doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr, y + 5, { align: "right" });
 
-  // Logo at bottom-right (next to Contact Information)
+  // ── Separator line between body and footer ──
+  doc.setDrawColor(180, 180, 185);
+  doc.setLineWidth(0.4);
+  doc.line(ml, y + 28, pageWidth - mr, y + 28);
+
+  // ── Company details at bottom (3 columns) ──
+  const footerY = y + 33;
+  // Left: logo
   if (logoDataUrl) {
     try {
-      // Position: right side, aligned with company name
-      const logoW = 32;
-      const logoH = 12;
-      doc.addImage(logoDataUrl, "PNG", pageWidth - mr - logoW, y + 1, logoW, logoH);
+      const logoW = 35;
+      const logoH = 14;
+      doc.addImage(logoDataUrl, "PNG", ml, footerY - 1, logoW, logoH);
     } catch { /* ignore if image fails */ }
   }
+  // Middle: company name + address
+  const midX = pageWidth / 2 - 25;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text(s.companyName || "WXY SOLUTIONS", midX, footerY);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 85);
+  doc.text(s.addressLine1 || "Dar Es Salaam Branch, Cocacola Road", midX, footerY + 5);
+  doc.text(s.addressLine2 || "Sokoine Road, Central Plaza Opp, Naaz Hotel & Fifi's Cafe", midX, footerY + 10);
+  doc.text(s.addressCity || "Arusha, Arusha", midX, footerY + 15);
+  doc.text(s.addressCountry || "Tanzania, United Republic of", midX, footerY + 20);
+  // Right: contact info
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("Contact Information", pageWidth - mr - 50, footerY, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text(`Mobile: ${s.contactPhone || "+255 764 713 056 | +255 746 589 376"}`, pageWidth - mr - 50, footerY + 5, { align: "right" });
 
-  // ── Footer ──
+  // ── Page number ──
   doc.setFontSize(7);
   doc.setTextColor(140, 140, 145);
   doc.text(`Page 1 of 1 for INVOICE #${invoice.invoiceNumber}`, pageWidth / 2, pageHeight - 10, { align: "center" });
@@ -607,10 +633,13 @@ export function printInvoice(invoice: InvoicePDFData) {
     .notes-section p { font-size: 11px; color: #505055; line-height: 1.7; }
     .thank-you { text-align: center; margin-top: 30px; font-size: 14px; font-style: italic; color: #3c3c41; }
     .footer-separator { border-top: 1.5px solid #999; margin: 30px 0 8px 0; }
-    .bottom-company { margin-top: 0; display: flex; justify-content: space-between; padding-top: 12px; }
-    .bottom-company .name { font-size: 12px; font-weight: 700; }
-    .bottom-company .details { font-size: 10px; color: #505055; line-height: 1.6; }
-    .bottom-contact { text-align: right; }
+    .bottom-company { margin-top: 0; display: flex; justify-content: space-between; align-items: flex-start; padding-top: 12px; gap: 20px; }
+    .bottom-logo { flex: 0 0 auto; }
+    .bottom-logo img { height: 30px; width: auto; display: block; }
+    .bottom-center { flex: 0 0 auto; text-align: center; }
+    .bottom-center .company-name { font-size: 12px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .bottom-center .details { font-size: 9px; color: #505055; line-height: 1.5; text-align: center; }
+    .bottom-contact { flex: 0 0 auto; text-align: right; min-width: 160px; }
     .bottom-contact .label { font-size: 11px; font-weight: 700; }
     .bottom-contact .number { font-size: 10px; color: #505055; }
     .page-footer { text-align: center; margin-top: 30px; font-size: 10px; color: #8c8c91; }
@@ -699,8 +728,11 @@ export function printInvoice(invoice: InvoicePDFData) {
 
   <div class="footer-separator"></div>
 
-  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-    <div>
+  <div class="bottom-company">
+    <div class="bottom-logo">
+      <img src="${logo}" alt="WXY" style="height: 30px; width: auto; display: block;" />
+    </div>
+    <div class="bottom-center">
       <div style="font-size: 12px; font-weight: 700;">${companyName}</div>
       <div style="font-size: 9px; color: #505055; margin-top: 4px; line-height: 1.5;">
         ${addr1}<br>
@@ -709,10 +741,9 @@ export function printInvoice(invoice: InvoicePDFData) {
         ${addrCountry}
       </div>
     </div>
-    <div style="text-align: right;">
-      <img src="${logo}" alt="WXY" style="height: 36px; width: auto; display: block; margin-bottom: 2px;" />
-      <div style="font-size: 11px; font-weight: 700;">Contact Information</div>
-      <div style="font-size: 9px; color: #505055; margin-top: 4px;">Mobile: ${phone}</div>
+    <div class="bottom-contact">
+      <div class="label">Contact Information</div>
+      <div class="number">Mobile: ${phone}</div>
     </div>
   </div>
 
