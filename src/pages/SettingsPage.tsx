@@ -272,16 +272,52 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Logo URL</Label>
+              <Label>Logo</Label>
               <div className="flex items-center gap-3">
-                <Input value={invoiceSettings.logoUrl || ""} onChange={(e) => setInv("logoUrl", e.target.value)} placeholder="/wxy-logo.svg" className="flex-1" />
+                <Input value={invoiceSettings.logoUrl || ""} onChange={(e) => setInv("logoUrl", e.target.value)} placeholder="Paste image URL or upload..." className="flex-1" />
+                <Label className="flex items-center gap-2 px-3 py-2 border rounded-md text-caption cursor-pointer hover:bg-[var(--glass-fill-subtle)] transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async () => {
+                        const dataUrl = reader.result as string;
+                        setInv("logoUrl", dataUrl);
+                        try {
+                          const token = localStorage.getItem("printhub_token");
+                          const res = await fetch("/api/invoice-settings/upload-logo", {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${token}` },
+                            body: JSON.stringify({ file: dataUrl.split(",")[1], name: file.name }),
+                          });
+                          if (res.ok) {
+                            const updated = await res.json();
+                            setInvoiceSettings(updated);
+                            toast({ title: "Logo uploaded", variant: "success" });
+                          }
+                        } catch {}
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </Label>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <p className="text-caption text-[var(--text-tertiary)]">Paste an image URL or click Upload to select a file. The logo is stored in the database and appears on all invoices.</p>
+                </div>
                 {invoiceSettings.logoUrl && (
                   <div className="w-20 h-12 rounded border border-[var(--glass-border)] bg-white flex items-center justify-center p-1 flex-shrink-0">
                     <img src={invoiceSettings.logoUrl} alt="Logo preview" className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                 )}
               </div>
-              <p className="text-caption text-[var(--text-tertiary)]">Preview shows the logo as it appears on invoices</p>
             </div>
 
             <Separator className="my-4" />

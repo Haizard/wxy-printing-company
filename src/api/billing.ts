@@ -531,4 +531,33 @@ export default function registerBillingRoutes(app: any, authMiddleware: any) {
       res.json(updated);
     } catch (error) { console.error("Update invoice settings error:", error); res.status(500).json({ error: "Failed to update settings" }); }
   });
+
+  // Upload invoice logo — accepts base64 string from JSON body, saves as data URL
+  app.post("/api/invoice-settings/upload-logo", authMiddleware, async (req: any, res: any) => {
+    try {
+      const user = (req as any).user;
+      if (!user || user.role !== "admin") return res.status(403).json({ error: "Admin access required" });
+      const { file } = req.body;
+      if (!file || typeof file !== "string") return res.status(400).json({ error: "No file data provided" });
+      // file is expected as base64 without data URI prefix
+      const base64 = file.startsWith("data:") ? file.split(",")[1] : file;
+      const buffer = Buffer.from(base64, "base64");
+      if (buffer.length > 500000) return res.status(400).json({ error: "File too large (max 500KB)" });
+      // Detect mime type from first bytes
+      const header = buffer.slice(0, 4).toString("hex");
+      const isSvg = buffer.toString("utf8", 0, Math.min(20, buffer.length)).trimStart().startsWith("<");
+      const mime = isSvg ? "image/svg+xml" : "image/png";
+      const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+      const [existing] = await db.select().from(invoiceSettings).limit(1);
+      if (!existing) {
+        const [created] = await db.insert(invoiceSettings).values({ logoUrl: dataUrl, updatedAt: new Date() }).returning();
+        return res.json(created);
+      }
+      const [updated] = await db.update(invoiceSettings)
+        .set({ logoUrl: dataUrl, updatedAt: new Date() })
+        .where(eq(invoiceSettings.id, existing.id))
+        .returning();
+      res.json(updated);
+    } catch (error: any) { console.error("Upload logo error:", error); res.status(500).json({ error: error.message || "Failed to upload logo" }); }
+  });
 }
